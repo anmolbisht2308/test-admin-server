@@ -47,3 +47,22 @@ export async function recordAudit({
     diff,
   });
 }
+
+/** Bulk variant: one log per entity, written in one insert. */
+export async function recordAuditMany(entries: AuditEntry[]) {
+  if (entries.length === 0) return;
+  await AuditLogModel.insertMany(
+    entries.map(({ actorId, entity, entityId, action, before, after }) => ({
+      actor: new Types.ObjectId(actorId),
+      entity,
+      entityId,
+      action,
+      diff:
+        action === "create"
+          ? { after: after ?? {} }
+          : action === "delete"
+            ? { before: before ?? {} }
+            : diffObjects(before ?? {}, after ?? {}),
+    })),
+  );
+}

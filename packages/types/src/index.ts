@@ -5,5 +5,7 @@ export * from "./exam-template.js";
 export * from "./exam.js";
 export * from "./health.js";
 export * from "./jobs.js";
+export * from "./question.js";
 export * from "./taxonomy.js";
+export * from "./test.js";
 export * from "./user.js";

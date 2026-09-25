@@ -33,7 +33,8 @@ export const templateSectionSchema = z.object({
 });
 export type TemplateSection = z.infer<typeof templateSectionSchema>;
 
-const templateFields = z.object({
+/** Template fields without cross-field rules (used for snapshots stored on tests). */
+export const examTemplateCoreSchema = z.object({
   key: slugSchema,
   name: z.string().trim().min(2).max(120),
   family: examFamilySchema,
@@ -53,6 +54,7 @@ const templateFields = z.object({
   qualifyingPercent: z.number().min(0).max(100).optional(),
 });
 
+const templateFields = examTemplateCoreSchema;
 type TemplateFields = z.infer<typeof templateFields>;
 
 function checkTemplate(t: TemplateFields, ctx: z.RefinementCtx) {

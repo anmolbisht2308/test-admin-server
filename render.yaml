@@ -42,6 +42,19 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_IDS
         sync: false
+      # Figures: use s3 in production (Render's disk is wiped on every deploy).
+      - key: STORAGE_DRIVER
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_PUBLIC_BASE_URL
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
       - key: SEED_ADMIN_EMAIL
         sync: false
       - key: SEED_ADMIN_PASSWORD

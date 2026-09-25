@@ -1,10 +1,16 @@
-import { slugSchema, type ExamDetailResponse, type ExamListResponse } from "@mockprep/types";
+import {
+  slugSchema,
+  type ExamDetailResponse,
+  type ExamListResponse,
+  type PublicTestListResponse,
+} from "@mockprep/types";
 import { Router } from "express";
 import { toExamDto, toTemplateDto } from "../lib/dto.js";
 import { notFoundError } from "../lib/httpError.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
 import { ExamModel } from "../models/exam.js";
 import { ExamTemplateModel } from "../models/examTemplate.js";
+import { TestModel } from "../models/test.js";
 
 // Public catalogue changes rarely; short cache keeps admin edits visible within a minute.
 const CACHE = "public, max-age=60, s-maxage=60, stale-while-revalidate=300";
@@ -39,6 +45,37 @@ export function catalogueRouter(): Router {
           const t = byKey.get(key);
           return t ? [toTemplateDto(t)] : [];
         }),
+      };
+      res.set("Cache-Control", CACHE).json(body);
+    }),
+  );
+
+  // Published tests for an exam page (cards only; nothing about questions or answers).
+  router.get(
+    "/:slug/tests",
+    asyncHandler(async (req, res) => {
+      const slug = slugSchema.safeParse(req.params.slug);
+      if (!slug.success) throw notFoundError("Exam");
+      const now = new Date();
+      const tests = await TestModel.find({
+        examKey: slug.data,
+        status: "published",
+        $or: [{ publishAt: null }, { publishAt: { $lte: now } }],
+      })
+        .sort({ publishedAt: -1 })
+        .limit(200)
+        .lean();
+      const body: PublicTestListResponse = {
+        tests: tests.map((t) => ({
+          id: t._id.toString(),
+          title: t.title,
+          type: t.type,
+          isFree: t.isFree,
+          questionCount: t.sections.reduce((acc, s) => acc + s.questionIds.length, 0),
+          totalTimeSec: t.templateSnapshot.totalTimeSec,
+          sectionCount: t.sections.length,
+          publishedAt: (t.publishedAt ?? t.updatedAt).toISOString(),
+        })),
       };
       res.set("Cache-Control", CACHE).json(body);
     }),

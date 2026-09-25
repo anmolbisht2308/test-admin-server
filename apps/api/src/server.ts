@@ -8,6 +8,11 @@ import { createRedis, pingRedis } from "./redis.js";
 const env = loadEnv();
 const logger = createLogger(env);
 const redis = createRedis(env.REDIS_URL, logger);
+if (env.NODE_ENV === "production" && env.STORAGE_DRIVER === "local") {
+  logger.warn(
+    "STORAGE_DRIVER=local in production: uploaded figures are lost when the disk is wiped. Use s3.",
+  );
+}
 
 const app = createApp({
   env,

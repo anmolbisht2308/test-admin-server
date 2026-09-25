@@ -59,8 +59,23 @@ export const envSchema = z
     MSG91_TEMPLATE_ID: z.string().optional(),
     /** OAuth client ids accepted as the Google ID token audience. Empty = Google sign-in off. */
     GOOGLE_CLIENT_IDS: optionalCommaList,
+
+    // ----- file storage (question figures) -----
+    STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
+    /** local driver: directory for uploaded files (served at /api/files/*). */
+    LOCAL_UPLOAD_DIR: z.string().default("./uploads"),
+    S3_BUCKET: z.string().optional(),
+    S3_REGION: z.string().optional(),
+    /** Public base URL for files (bucket URL or CloudFront), no trailing slash. */
+    S3_PUBLIC_BASE_URL: z.url().optional(),
   })
   .superRefine((env, ctx) => {
+    if (env.STORAGE_DRIVER === "s3") {
+      for (const key of ["S3_BUCKET", "S3_REGION", "S3_PUBLIC_BASE_URL"] as const) {
+        if (!env[key])
+          ctx.addIssue({ code: "custom", path: [key], message: "required when STORAGE_DRIVER=s3" });
+      }
+    }
     if (env.OTP_PROVIDER === "msg91") {
       for (const key of ["MSG91_AUTH_KEY", "MSG91_TEMPLATE_ID"] as const) {
         if (!env[key])

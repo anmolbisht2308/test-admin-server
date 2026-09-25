@@ -20,6 +20,8 @@ import { createOtpService } from "./services/otp.js";
 import { createOtpSender, type OtpSender } from "./services/otpSender.js";
 import { RedisRateLimitStore } from "./services/rateLimit.js";
 import { createSessionService } from "./services/sessions.js";
+import { LocalStorage, createStorage, type Storage } from "./services/storage.js";
+import { localStorageRouter } from "./routes/storage.js";
 
 export interface AppDeps {
   env: Env;
@@ -30,6 +32,8 @@ export interface AppDeps {
   otpSender?: OtpSender;
   /** Defaults from GOOGLE_CLIENT_IDS (null = Google sign-in off). */
   googleVerifier?: GoogleVerifier | null;
+  /** Defaults from STORAGE_DRIVER (local disk or S3). */
+  storage?: Storage;
   /** Extra routers mounted under /api after the feature routers. */
   routers?: Router[];
 }
@@ -52,6 +56,8 @@ export function createApp(deps: AppDeps): Express {
         ? createGoogleVerifier(env.GOOGLE_CLIENT_IDS)
         : deps.googleVerifier,
   };
+
+  const storage = deps.storage ?? createStorage(env);
 
   const app = express();
   app.disable("x-powered-by");
@@ -84,13 +90,15 @@ export function createApp(deps: AppDeps): Express {
       message: { error: "Too many requests, please slow down." },
     }),
   );
+  // Local file storage (dev): raw-body upload route + static files. Before the JSON parser.
+  if (storage instanceof LocalStorage) app.use("/api", localStorageRouter(storage));
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
 
   app.use("/api/auth", studentAuthRouter(ctx));
   app.use("/api/me", meRouter(ctx));
   app.use("/api/exams", catalogueRouter());
-  app.use("/api/admin", adminRouter(ctx));
+  app.use("/api/admin", adminRouter(ctx, storage));
   for (const router of routers) app.use("/api", router);
 
   app.use(notFound);
