@@ -28,21 +28,26 @@ The product is split across two pnpm + Turborepo monorepos:
 | test-admin-client                 | apps/web, apps/admin, packages/ui, packages/config     | Vercel  |
 
 `packages/types` lives **here** and is the single source of truth for shared TS types + Zod schemas.
-It is published as `@mockprep/types` (GitHub Packages) and consumed by the client repo at a pinned
-version. Never copy schemas into the client. For local cross-repo work, `pnpm link` the local
-package into the client checkout.
+It is released as a tarball on a GitHub Release `types-v<version>` (workflow
+`release-types.yml`, runs on the default branch when `packages/types` changes and the version is
+new). The client pins the release URL. Public repo → no npm token anywhere. Never copy schemas into
+the client. For local cross-repo work, `pnpm link` the local package into the client checkout.
 
 A change to an API contract lands here first: update schema in packages/types → implement in api →
-bump + publish `@mockprep/types` → then update the client repo.
+bump `packages/types` version → merge (release is automatic) → update the URL in the client repo.
 
 ## 3. Repo layout (this repo)
 
 ```
 apps/
   api/        Node 22 + Express + TypeScript + Mongoose. REST API for web + admin.
-              src/env.ts (Zod-validated env, fail fast), routes/, models/, services/, middleware/
+              src/env.ts (Zod env, fail fast), app.ts (createApp({ env, logger, health, routers })),
+              server.ts (listen + Mongo retry + shutdown), db.ts, redis.ts, lib/httpError.ts,
+              middleware/ (asyncHandler, errorHandler), routes/ (one Router factory per feature).
+              Later: models/, services/. Tests in test/ (supertest against createApp).
   worker/     BullMQ workers on Redis for long jobs (PDF ingest, scoring, stats, invoices,
-              notifications). One file per queue under src/jobs/.
+              notifications). One processor factory per queue under src/jobs/; wired in src/index.ts.
+              Queue names + job payload schemas live in @mockprep/types (jobs.ts).
 packages/
   types/      @mockprep/types — shared TS types + Zod schemas (API inputs/outputs, exam templates,
               questions, tests, attempts). Built to dist/ and published.
@@ -65,12 +70,15 @@ docker compose up -d  # local MongoDB + Redis
 pnpm dev              # api + worker in watch mode
 pnpm typecheck        # tsc --noEmit everywhere
 pnpm lint             # eslint + prettier --check
-pnpm test             # vitest
-pnpm build            # production build of all packages
+pnpm test             # vitest (api uses mongodb-memory-server)
+pnpm build            # tsc → dist/ for every package
+pnpm format           # prettier --write .
 pnpm --filter @mockprep/api <script>   # run a script in one package
+TEST_MONGODB_URI=mongodb://localhost:27017/mockprep-test pnpm test   # use docker Mongo instead
 ```
 
-(Commands become real in Phase 1; update this section if any change.)
+Env: copy `apps/*/.env.example` → `.env` (loaded by `tsx --env-file-if-exists`). Adding an env var =
+add to that app's `env.ts` schema + `.env.example` + `render.yaml` + README table.
 
 ## 5. Conventions
 
@@ -138,7 +146,7 @@ Build order; each phase ends deployable and clickable. Start each in a fresh ses
 | #   | Phase                                     | Status |
 | --- | ----------------------------------------- | ------ |
 | 0   | Project context (CLAUDE.md)               | done   |
-| 1   | Setup: monorepos, CI/CD, deploys, /health |        |
+| 1   | Setup: monorepos, CI/CD, deploys, /health | done   |
 | 2   | Auth + exam catalogue + exam templates    |        |
 | 3   | Question bank + test builder              |        |
 | 4   | PDF → test pipeline                       |        |
@@ -148,9 +156,13 @@ Build order; each phase ends deployable and clickable. Start each in a fresh ses
 | 8   | Live tests + notifications                |        |
 | 9   | More exams + hardening + launch           |        |
 
-**Current phase: 0 (complete) — next: Phase 1.**
+**Current phase: 1 (complete) — next: Phase 2.**
 
 ## 9. Change log
 
 - Phase 0: CLAUDE.md created. Decision: two monorepos (server / client), `@mockprep` scope,
   `@mockprep/types` owned and published by this repo.
+- Phase 1: api (Express 5, /health → 200 ok / 503 degraded), worker (BullMQ ping), types
+  (released as GitHub Release tarball instead of GitHub Packages: npm scope must match the GitHub
+  owner there), CI on every push/PR, render.yaml (Singapore), docker-compose. Rate limiter uses the
+  in-memory store for now (TODO phase 2: Redis store).
