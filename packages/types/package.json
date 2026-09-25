@@ -1,0 +1,42 @@
+{
+  "name": "@mockprep/types",
+  "version": "0.1.0",
+  "description": "Shared TypeScript types and Zod schemas for mockprep (api, worker, web, admin).",
+  "type": "module",
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anmolbisht2308/test-admin-server.git",
+    "directory": "packages/types"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@mockprep/config": "workspace:*",
+    "@types/node": "^22.19.0",
+    "eslint": "^9.39.5",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.2",
+    "zod": "^4.6.5"
+  }
+}

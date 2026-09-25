@@ -11,6 +11,7 @@ the system creates a publish-ready test with minimal manual work (review only fl
 Content is bilingual (English + Hindi). Most students are on low-end Android phones on slow networks.
 
 Exam families:
+
 - Banking: SBI PO / Clerk, IBPS PO / Clerk
 - SSC: CGL, CHSL
 - UPSC Prelims: GS Paper I + CSAT
@@ -21,10 +22,10 @@ Exam families:
 
 The product is split across two pnpm + Turborepo monorepos:
 
-| Repo | Contains | Hosting |
-|---|---|---|
-| **test-admin-server** (this repo) | apps/api, apps/worker, packages/types, packages/config | Render |
-| test-admin-client | apps/web, apps/admin, packages/ui, packages/config | Vercel |
+| Repo                              | Contains                                               | Hosting |
+| --------------------------------- | ------------------------------------------------------ | ------- |
+| **test-admin-server** (this repo) | apps/api, apps/worker, packages/types, packages/config | Render  |
+| test-admin-client                 | apps/web, apps/admin, packages/ui, packages/config     | Vercel  |
 
 `packages/types` lives **here** and is the single source of truth for shared TS types + Zod schemas.
 It is published as `@mockprep/types` (GitHub Packages) and consumed by the client repo at a pinned
@@ -74,11 +75,13 @@ pnpm --filter @mockprep/api <script>   # run a script in one package
 ## 5. Conventions
 
 **TypeScript**
+
 - `strict: true`; no `any` (use `unknown` + narrowing). No `@ts-ignore` without a comment why.
 - Every API input (body, query, params) is validated with a Zod schema imported from
   `@mockprep/types`. Response types come from the same package.
 
 **API**
+
 - Errors are always `{ error: string, details?: unknown }` with the correct HTTP status
   (400 validation, 401 unauthenticated, 403 forbidden, 404, 409 conflict, 429, 500).
 - Every async route handler is wrapped in `asyncHandler` so errors reach the single error middleware.
@@ -87,22 +90,26 @@ pnpm --filter @mockprep/api <script>   # run a script in one package
 - Long work (> ~1 s) goes to a BullMQ job in apps/worker, not the request.
 
 **Data**
+
 - Money is integer paise (`pricePaise`, `amountPaise`). Never floats, never rupees in storage.
 - Times stored in UTC (`Date`); display conversion to Asia/Kolkata happens in the client.
 - Question content is Markdown with LaTeX in `$...$` / `$$...$$`. Store it raw; the client renders
   it only through `@mockprep/ui` QuestionRenderer (sanitised). Never store pre-rendered HTML.
 
 **Exam templates**
+
 - Every exam difference — sections, question counts, timers, marking, option count, section
   switching, UI skin — comes from an exam template document. Never hard-code exam rules in scoring,
   validation or UI. Tests keep a `templateSnapshot` so later template edits never break old tests.
 
 **Security**
+
 - Correct answers and solutions are never sent to a student before that attempt is submitted.
   Student paper payloads are built by a dedicated serializer that strips them; test it.
 - Secrets only via env (validated in env.ts); `.env.example` lists every variable with no values.
 
 **Client-facing constraints the API must respect**
+
 - Student test screen must work on a 360px Android on slow 3G: keep paper payloads small,
   cacheable, and answer saves batched.
 
@@ -128,18 +135,18 @@ pnpm --filter @mockprep/api <script>   # run a script in one package
 
 Build order; each phase ends deployable and clickable. Start each in a fresh session in plan mode.
 
-| # | Phase | Status |
-|---|---|---|
-| 0 | Project context (CLAUDE.md) | done |
-| 1 | Setup: monorepos, CI/CD, deploys, /health | |
-| 2 | Auth + exam catalogue + exam templates | |
-| 3 | Question bank + test builder | |
-| 4 | PDF → test pipeline | |
-| 5 | Test engine | |
-| 6 | Results + analysis | |
-| 7 | Payments | |
-| 8 | Live tests + notifications | |
-| 9 | More exams + hardening + launch | |
+| #   | Phase                                     | Status |
+| --- | ----------------------------------------- | ------ |
+| 0   | Project context (CLAUDE.md)               | done   |
+| 1   | Setup: monorepos, CI/CD, deploys, /health |        |
+| 2   | Auth + exam catalogue + exam templates    |        |
+| 3   | Question bank + test builder              |        |
+| 4   | PDF → test pipeline                       |        |
+| 5   | Test engine                               |        |
+| 6   | Results + analysis                        |        |
+| 7   | Payments                                  |        |
+| 8   | Live tests + notifications                |        |
+| 9   | More exams + hardening + launch           |        |
 
 **Current phase: 0 (complete) — next: Phase 1.**
 

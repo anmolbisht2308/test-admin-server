@@ -1,0 +1,49 @@
+# Render Blueprint: api (web service) + worker (background worker).
+# Render dashboard → New → Blueprint → pick this repo. Values marked sync: false are
+# entered in the dashboard on first deploy (never commit them).
+# NODE_ENV=development on install so devDependencies (typescript) are available to build.
+services:
+  - type: web
+    name: mockprep-api
+    runtime: node
+    region: singapore
+    plan: starter
+    buildCommand: corepack enable && NODE_ENV=development pnpm install --frozen-lockfile && pnpm turbo run build --filter=@mockprep/api...
+    startCommand: node apps/api/dist/server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: LOG_LEVEL
+        value: info
+      - key: TRUST_PROXY
+        value: "1"
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+
+  - type: worker
+    name: mockprep-worker
+    runtime: node
+    region: singapore
+    plan: starter
+    buildCommand: corepack enable && NODE_ENV=development pnpm install --frozen-lockfile && pnpm turbo run build --filter=@mockprep/worker...
+    startCommand: node apps/worker/dist/index.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: LOG_LEVEL
+        value: info
+      - key: WORKER_CONCURRENCY
+        value: "5"
+      - key: REDIS_URL
+        sync: false
