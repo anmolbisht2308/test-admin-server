@@ -19,6 +19,9 @@ export const errorHandler: ErrorRequestHandler = (err: unknown, req, res, _next)
   } else if (err instanceof ZodError) {
     status = 400;
     body = { error: "Validation failed", details: err.issues };
+  } else if (isDuplicateKeyError(err)) {
+    status = 409;
+    body = { error: "Already exists", details: { fields: Object.keys(err.keyValue ?? {}) } };
   } else if (isBodyParserError(err)) {
     status = err.status;
     body = { error: err.type === "entity.too.large" ? "Request body too large" : "Invalid JSON" };
@@ -37,4 +40,10 @@ function isBodyParserError(err: unknown): err is { status: number; type: string 
     typeof err.status === "number" &&
     typeof err.type === "string"
   );
+}
+
+function isDuplicateKeyError(
+  err: unknown,
+): err is { code: 11000; keyValue?: Record<string, unknown> } {
+  return typeof err === "object" && err !== null && "code" in err && err.code === 11000;
 }

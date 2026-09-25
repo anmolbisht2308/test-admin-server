@@ -12,6 +12,7 @@ const redis = createRedis(env.REDIS_URL, logger);
 const app = createApp({
   env,
   logger,
+  redis,
   health: { db: isMongoUp, redis: () => pingRedis(redis), version: env.version },
 });
 

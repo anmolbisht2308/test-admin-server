@@ -1,17 +1,15 @@
 import { healthResponseSchema } from "@mockprep/types";
-import mongoose from "mongoose";
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it, inject } from "vitest";
-import { connectMongo, isMongoUp } from "../src/db.js";
-import { buildTestApp, silentLogger } from "./helpers.js";
+import { describe, expect, it } from "vitest";
+import { isMongoUp } from "../src/db.js";
+import { buildTestApp, useTestDatabase } from "./helpers.js";
 
 describe("GET /health", () => {
-  beforeAll(async () => {
-    await connectMongo(inject("mongoUri"), silentLogger, { maxAttempts: 3 });
-  });
+  useTestDatabase();
 
-  afterAll(async () => {
-    await mongoose.disconnect();
+  it("is also served at /api/health (for the Next.js proxy)", async () => {
+    const res = await request(buildTestApp()).get("/api/health").expect(200);
+    expect(res.body.status).toBe("ok");
   });
 
   it("reports ok when Mongo and Redis are up", async () => {

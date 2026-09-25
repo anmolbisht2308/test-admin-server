@@ -13,7 +13,7 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "env": ["TEST_MONGODB_URI"]
+      "env": ["TEST_MONGODB_URI", "TEST_REDIS_URL"]
     },
     "dev": {
       "dependsOn": ["^build"],

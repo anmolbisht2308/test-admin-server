@@ -26,5 +26,14 @@ export function nodeConfig(tsconfigRootDir) {
         "no-console": "error",
       },
     },
+    {
+      // supertest types response bodies as `any`; tests assert on them directly.
+      files: ["test/**/*.ts"],
+      rules: {
+        "@typescript-eslint/no-unsafe-member-access": "off",
+        "@typescript-eslint/no-unsafe-assignment": "off",
+        "@typescript-eslint/no-unsafe-argument": "off",
+      },
+    },
   );
 }
