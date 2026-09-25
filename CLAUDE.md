@@ -39,25 +39,18 @@ bump `packages/types` version → merge (release is automatic) → update the UR
 ## 3. Repo layout (this repo)
 
 ```
-apps/
-  api/        Node 22 + Express + TypeScript + Mongoose. REST API for web + admin.
-              src/env.ts (Zod env, fail fast), app.ts (createApp({ env, logger, health, routers })),
-              server.ts (listen + Mongo retry + shutdown), db.ts, redis.ts, lib/httpError.ts,
-              context.ts (AppContext passed to route factories), middleware/ (asyncHandler,
-              errorHandler, auth: requireAuth/requireRole/getAuth), lib/ (httpError, tokens (jose),
-              crypto, totp, cookies, dto), models/ (user, session, exam, examTemplate, taxonomy,
-              auditLog), services/ (otp + otpSender, sessions, google, rateLimit, audit),
-              routes/ (auth, adminAuth, me, catalogue, admin/*), scripts/ (seed).
-              Tests in test/ (supertest against createApp; helpers.ts has login helpers).
-  worker/     BullMQ workers on Redis for long jobs (PDF ingest, scoring, stats, invoices,
-              notifications). One processor factory per queue under src/jobs/; wired in src/index.ts.
-              Queue names + job payload schemas live in @mockprep/types (jobs.ts).
-packages/
-  types/      @mockprep/types — shared TS types + Zod schemas (API inputs/outputs, exam templates,
-              questions, tests, attempts). Built to dist/ and published.
-  config/     @mockprep/config — shared tsconfig, eslint, prettier.
-docker-compose.yml   local MongoDB 7 + Redis
-render.yaml          api (web service) + worker (background worker)
+apps/api/src/  Express 5 + Mongoose. env.ts (Zod, fail fast) · app.ts createApp(deps) · server.ts
+  context.ts (AppContext for route factories) · middleware/ (asyncHandler, errorHandler, auth)
+  lib/ (httpError, tokens, crypto, totp, cookies, dto mappers, studentPaper serializer)
+  models/ (user, session, exam, examTemplate, taxonomy, auditLog, question, test, series)
+  services/ (otp, sessions, google, rateLimit, audit, questions (hash/versioning),
+    questionImport (exceljs), testBuilder (checks + rule fill), storage (local | s3))
+  routes/ (auth, adminAuth, me, catalogue, storage, admin/*) · scripts/ (seed)
+apps/api/test/ supertest vs createApp; helpers.ts (db, logins), factories.ts (seed, makeQuestion)
+apps/worker/   BullMQ; one processor factory per queue in src/jobs/, wired in src/index.ts
+packages/types @mockprep/types: shared Zod schemas + types (released, see §2)
+packages/config shared tsconfig / eslint / prettier
+docker-compose.yml (Mongo 7 + Redis) · render.yaml (api + worker)
 ```
 
 Infra: MongoDB Atlas, Redis (Upstash), files on S3 (local-disk storage adapter in dev).
@@ -111,7 +104,7 @@ add to that app's `env.ts` schema + `.env.example` + `render.yaml` + README tabl
   `mp_art` /api/admin/auth), hashed in `sessions`; reuse after 20 s grace revokes the session.
   Browsers reach the api via the client apps' Next rewrites (TRUST_PROXY=2 on Render).
 - Zod gotcha: `.partial()` keeps `.default()`s, so update schemas are built from default-free
-  fields (see exam.ts).
+  fields (see exam.ts). Questions/templates are saved whole (PUT), never partially.
 
 **Data**
 
@@ -119,6 +112,12 @@ add to that app's `env.ts` schema + `.env.example` + `render.yaml` + README tabl
 - Times stored in UTC (`Date`); display conversion to Asia/Kolkata happens in the client.
 - Question content is Markdown with LaTeX in `$...$` / `$$...$$`. Store it raw; the client renders
   it only through `@mockprep/ui` QuestionRenderer (sanitised). Never store pre-rendered HTML.
+- Questions are versioned: `rootId` (= v1 id), `version`, `isLatest`. Editing content fields of a
+  question in a published test creates a new version (published tests keep the old id, drafts are
+  repointed); tag-only edits stay in place. Bank/listing/builder use `isLatest: true` only.
+- `hash` = sha1(normaliseForHash(stem, options)) for duplicates; "duplicate" flag on clash.
+- Figures via `services/storage.ts` (local driver: signed PUT `/api/storage/local/*`, served at
+  `/api/files/*`; s3 driver: presigned PUT). Production must use s3 (Render disk is ephemeral).
 
 **Exam templates**
 
@@ -129,7 +128,8 @@ add to that app's `env.ts` schema + `.env.example` + `render.yaml` + README tabl
 **Security**
 
 - Correct answers and solutions are never sent to a student before that attempt is submitted.
-  Student paper payloads are built by a dedicated serializer that strips them; test it.
+  Student payloads are built ONLY by `lib/studentPaper.ts` (allow-list copy; `studentQuestionSchema`
+  is `.strict()`); tests assert no answer keys appear.
 - Secrets only via env (validated in env.ts); `.env.example` lists every variable with no values.
 
 **Client-facing constraints the API must respect**
@@ -164,7 +164,7 @@ Build order; each phase ends deployable and clickable. Start each in a fresh ses
 | 0   | Project context (CLAUDE.md)               | done   |
 | 1   | Setup: monorepos, CI/CD, deploys, /health | done   |
 | 2   | Auth + exam catalogue + exam templates    | done   |
-| 3   | Question bank + test builder              |        |
+| 3   | Question bank + test builder              | done   |
 | 4   | PDF → test pipeline                       |        |
 | 5   | Test engine                               |        |
 | 6   | Results + analysis                        |        |
@@ -172,18 +172,17 @@ Build order; each phase ends deployable and clickable. Start each in a fresh ses
 | 8   | Live tests + notifications                |        |
 | 9   | More exams + hardening + launch           |        |
 
-**Current phase: 2 (complete) — next: Phase 3.**
+**Current phase: 3 (complete) — next: Phase 4.**
 
 ## 9. Change log
 
-- Phase 0: CLAUDE.md created. Decision: two monorepos (server / client), `@mockprep` scope,
-  `@mockprep/types` owned and published by this repo.
-- Phase 1: api (Express 5, /health → 200 ok / 503 degraded), worker (BullMQ ping), types
-  (released as GitHub Release tarball instead of GitHub Packages: npm scope must match the GitHub
-  owner there), CI on every push/PR, render.yaml (Singapore), docker-compose. Rate limiter uses the
-  in-memory store for now (TODO phase 2: Redis store).
-- Phase 2: auth (phone OTP w/ console+MSG91, Google via jose JWKS, admin argon2 + forced TOTP
-  enrolment), sessions with rotation/reuse detection/2-device limit, roles guard, users/sessions/
-  exams/examTemplates/taxonomy/auditLogs, public catalogue + admin CRUD, seed (Render
-  preDeployCommand), Redis-backed rate limiting, types 0.2.0. New deps: jose, argon2,
-  cookie-parser, qrcode.
+- Phase 0: CLAUDE.md; two monorepos, `@mockprep` scope, types owned + released here.
+- Phase 1: api /health (200 ok / 503 degraded), worker ping, types as GitHub Release tarball, CI,
+  render.yaml (Singapore), docker-compose.
+- Phase 2: phone OTP (console/MSG91) + Google (jose JWKS) + admin argon2 & forced TOTP; rotating
+  per-device sessions (2 student devices); roles; catalogue + admin CRUD; audit logs; seed; Redis
+  rate limits. Deps: jose, argon2, cookie-parser, qrcode.
+- Phase 3: versioned question bank (search, filters, bulk, duplicates), Excel/CSV import (exceljs),
+  figure storage (local + S3 presign; @aws-sdk/client-s3 + s3-request-presigner), tests with
+  frozen templateSnapshot, rule fill (mix, topics, taxonomy, not-used-in-N-days), live checks +
+  publish gate, student-paper preview, series API (UI later), public test cards; types 0.3.0.

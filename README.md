@@ -99,15 +99,18 @@ client app.
 5. Sign in to the admin panel with `SEED_ADMIN_EMAIL`. The first sign-in asks you to scan a QR
    code with an authenticator app (Google Authenticator, Authy, 1Password…).
 
-| Variable                                  | api | worker | Value                                                                                                         |
-| ----------------------------------------- | :-: | :----: | ------------------------------------------------------------------------------------------------------------- |
-| `MONGODB_URI`                             |  ✓  |        | Atlas SRV string                                                                                              |
-| `REDIS_URL`                               |  ✓  |   ✓    | Upstash `rediss://` URL                                                                                       |
-| `CORS_ORIGINS`                            |  ✓  |        | web + admin URLs, comma-separated (browsers go through the Next proxy, so this only matters for direct calls) |
-| `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD` |  ✓  |        | first superadmin. Password: 12+ chars with upper, lower and a digit                                           |
-| `OTP_PROVIDER`                            |  ✓  |        | `console` (codes only in the api log) or `msg91`                                                              |
-| `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID`     |  ✓  |        | required when `OTP_PROVIDER=msg91`. The Flow template must contain `##otp##`                                  |
-| `GOOGLE_CLIENT_IDS`                       |  ✓  |        | OAuth web client id(s). Leave empty to turn Google sign-in off                                                |
+| Variable                                       | api | worker | Value                                                                                                         |
+| ---------------------------------------------- | :-: | :----: | ------------------------------------------------------------------------------------------------------------- |
+| `MONGODB_URI`                                  |  ✓  |        | Atlas SRV string                                                                                              |
+| `REDIS_URL`                                    |  ✓  |   ✓    | Upstash `rediss://` URL                                                                                       |
+| `CORS_ORIGINS`                                 |  ✓  |        | web + admin URLs, comma-separated (browsers go through the Next proxy, so this only matters for direct calls) |
+| `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`      |  ✓  |        | first superadmin. Password: 12+ chars with upper, lower and a digit                                           |
+| `OTP_PROVIDER`                                 |  ✓  |        | `console` (codes only in the api log) or `msg91`                                                              |
+| `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID`          |  ✓  |        | required when `OTP_PROVIDER=msg91`. The Flow template must contain `##otp##`                                  |
+| `GOOGLE_CLIENT_IDS`                            |  ✓  |        | OAuth web client id(s). Leave empty to turn Google sign-in off                                                |
+| `STORAGE_DRIVER`                               |  ✓  |        | `s3` in production (Render's disk is wiped on every deploy); `local` only for dev                             |
+| `S3_BUCKET`, `S3_REGION`, `S3_PUBLIC_BASE_URL` |  ✓  |        | bucket for question figures and the public URL they are served from (bucket URL or CloudFront)                |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`   |  ✓  |        | IAM user limited to `s3:PutObject` on that bucket                                                             |
 
 `render.yaml` also sets these:
 
@@ -148,6 +151,32 @@ is wrong, the process exits and prints the name of each bad variable.
   Every admin write is recorded in `auditLogs`.
 - **Browsers never call Render directly.** Web and admin forward `/api/*` to the api through a
   Next.js rewrite, so the refresh cookies are first-party.
+
+## Question bank, import and tests
+
+- **Question bank.** Every question stores Markdown with LaTeX (`$…$`, `$$…$$`), optional Hindi
+  fields, an answer (option indices, or a min–max range for integer/numeric questions), tags and
+  an optional figure. Questions are versioned: if you change the content of a question used in a
+  **published** test, a new version is created. The published test keeps the old one; draft tests
+  switch to the new one.
+- **Excel/CSV import** (`POST /api/admin/questions/import`, raw file body). Download the template
+  from the admin Import page: it has the columns, examples and instructions. Each row is
+  validated with the same rules as the editor. Bad rows come back with their row number and the
+  reasons, and are skipped. Good rows are imported as approved. Rows already in the bank are
+  imported but flagged `duplicate`. Use `?dryRun=1` to check a file without importing it.
+- **Figures.** The admin editor asks the api for an upload URL and PUTs the image straight to it.
+  - In dev, files go to `LOCAL_UPLOAD_DIR` and are served at `/api/files/…`.
+  - In production they go to S3. The bucket needs a CORS rule allowing `PUT` from the admin
+    origin with a `content-type` header, and public read (or CloudFront) for `S3_PUBLIC_BASE_URL`.
+- **Tests.** A test copies its exam template when created (`templateSnapshot`), so later template
+  edits never change it.
+  - **Filling sections.** Pick questions from the bank, or fill by rule: count, topics, taxonomy
+    nodes, difficulty mix, and "not used in the last N days".
+  - **Publish checks.** Publishing is blocked until counts match the template and no question
+    lacks an answer, is a draft, is a duplicate, or has the wrong option count.
+  - **Preview.** "Preview as student" is built by the same serializer students will get, so it
+    contains no answers or solutions.
+  - **Student site.** Published tests appear as cards at `GET /api/exams/:slug/tests`.
 
 ## CI
 
