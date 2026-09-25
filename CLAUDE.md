@@ -43,8 +43,12 @@ apps/
   api/        Node 22 + Express + TypeScript + Mongoose. REST API for web + admin.
               src/env.ts (Zod env, fail fast), app.ts (createApp({ env, logger, health, routers })),
               server.ts (listen + Mongo retry + shutdown), db.ts, redis.ts, lib/httpError.ts,
-              middleware/ (asyncHandler, errorHandler), routes/ (one Router factory per feature).
-              Later: models/, services/. Tests in test/ (supertest against createApp).
+              context.ts (AppContext passed to route factories), middleware/ (asyncHandler,
+              errorHandler, auth: requireAuth/requireRole/getAuth), lib/ (httpError, tokens (jose),
+              crypto, totp, cookies, dto), models/ (user, session, exam, examTemplate, taxonomy,
+              auditLog), services/ (otp + otpSender, sessions, google, rateLimit, audit),
+              routes/ (auth, adminAuth, me, catalogue, admin/*), scripts/ (seed).
+              Tests in test/ (supertest against createApp; helpers.ts has login helpers).
   worker/     BullMQ workers on Redis for long jobs (PDF ingest, scoring, stats, invoices,
               notifications). One processor factory per queue under src/jobs/; wired in src/index.ts.
               Queue names + job payload schemas live in @mockprep/types (jobs.ts).
@@ -75,7 +79,10 @@ pnpm build            # tsc → dist/ for every package
 pnpm format           # prettier --write .
 pnpm --filter @mockprep/api <script>   # run a script in one package
 TEST_MONGODB_URI=mongodb://localhost:27017/mockprep-test pnpm test   # use docker Mongo instead
+pnpm --filter @mockprep/api seed       # idempotent: templates, exams, SEED_ADMIN_EMAIL superadmin
 ```
+
+Api tests need Redis at `TEST_REDIS_URL` (default redis://localhost:6379/15, wiped per test).
 
 Env: copy `apps/*/.env.example` → `.env` (loaded by `tsx --env-file-if-exists`). Adding an env var =
 add to that app's `env.ts` schema + `.env.example` + `render.yaml` + README table.
@@ -96,6 +103,15 @@ add to that app's `env.ts` schema + `.env.example` + `render.yaml` + README tabl
   No try/catch that swallows errors or sends ad-hoc error shapes.
 - Admin writes are recorded in `auditLogs` (actor, entity, entityId, action, diff, at).
 - Long work (> ~1 s) goes to a BullMQ job in apps/worker, not the request.
+- Routes live under `/api` (health also at `/health`). Admin routes under `/api/admin`, guarded by
+  requireAuth + requireRole(ADMIN_ROLES); writes need `CONTENT_WRITERS` (superadmin, content).
+- Responses are built with `lib/dto.ts` mappers (never send raw documents). Duplicate-key errors
+  map to 409 in the error middleware.
+- Auth: 15-min JWT (Bearer) + rotating refresh cookie per device (`mp_rt` /api/auth,
+  `mp_art` /api/admin/auth), hashed in `sessions`; reuse after 20 s grace revokes the session.
+  Browsers reach the api via the client apps' Next rewrites (TRUST_PROXY=2 on Render).
+- Zod gotcha: `.partial()` keeps `.default()`s, so update schemas are built from default-free
+  fields (see exam.ts).
 
 **Data**
 
@@ -147,7 +163,7 @@ Build order; each phase ends deployable and clickable. Start each in a fresh ses
 | --- | ----------------------------------------- | ------ |
 | 0   | Project context (CLAUDE.md)               | done   |
 | 1   | Setup: monorepos, CI/CD, deploys, /health | done   |
-| 2   | Auth + exam catalogue + exam templates    |        |
+| 2   | Auth + exam catalogue + exam templates    | done   |
 | 3   | Question bank + test builder              |        |
 | 4   | PDF → test pipeline                       |        |
 | 5   | Test engine                               |        |
@@ -156,7 +172,7 @@ Build order; each phase ends deployable and clickable. Start each in a fresh ses
 | 8   | Live tests + notifications                |        |
 | 9   | More exams + hardening + launch           |        |
 
-**Current phase: 1 (complete) — next: Phase 2.**
+**Current phase: 2 (complete) — next: Phase 3.**
 
 ## 9. Change log
 
@@ -166,3 +182,8 @@ Build order; each phase ends deployable and clickable. Start each in a fresh ses
   (released as GitHub Release tarball instead of GitHub Packages: npm scope must match the GitHub
   owner there), CI on every push/PR, render.yaml (Singapore), docker-compose. Rate limiter uses the
   in-memory store for now (TODO phase 2: Redis store).
+- Phase 2: auth (phone OTP w/ console+MSG91, Google via jose JWKS, admin argon2 + forced TOTP
+  enrolment), sessions with rotation/reuse detection/2-device limit, roles guard, users/sessions/
+  exams/examTemplates/taxonomy/auditLogs, public catalogue + admin CRUD, seed (Render
+  preDeployCommand), Redis-backed rate limiting, types 0.2.0. New deps: jose, argon2,
+  cookie-parser, qrcode.
