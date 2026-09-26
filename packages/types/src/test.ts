@@ -14,7 +14,8 @@ export const TEST_TYPE_LABELS: Record<TestType, string> = {
   quiz: "Quiz",
 };
 
-export const testStatusSchema = z.enum(["draft", "published"]);
+/** practice: a private mini-test made from one student's wrong answers. */
+export const testStatusSchema = z.enum(["draft", "published", "practice"]);
 export type TestStatus = z.infer<typeof testStatusSchema>;
 
 /** Copy of the template taken when the test is created; later template edits never change it. */
@@ -45,6 +46,8 @@ export const testSchema = z.object({
   /** When students may see the test (null = as soon as it is published). */
   publishAt: isoDateSchema.nullable(),
   publishedAt: isoDateSchema.nullable(),
+  /** Expected cut-offs shown on results (optional). */
+  cutoffs: z.object({ overall: z.number().nullable(), sections: z.record(z.string(), z.number()) }),
   createdAt: isoDateSchema,
   updatedAt: isoDateSchema,
 });

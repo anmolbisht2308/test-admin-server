@@ -141,6 +141,11 @@ export const attemptResultResponseSchema = z.object({
   startedAt: isoDateSchema,
   submittedAt: isoDateSchema.nullable(),
   result: attemptResultSchema.nullable(),
+  /** First attempts only; null for re-attempts, practice and until scored. */
+  rank: z
+    .object({ rank: z.number().int(), total: z.number().int(), percentile: z.number() })
+    .nullable(),
+  practice: z.boolean(),
 });
 export type AttemptResultResponse = z.infer<typeof attemptResultResponseSchema>;
 
@@ -148,6 +153,8 @@ export type AttemptResultResponse = z.infer<typeof attemptResultResponseSchema>;
 export const myAttemptSchema = z.object({
   id: objectIdSchema,
   testId: objectIdSchema,
+  title: z.string(),
+  practice: z.boolean(),
   status: attemptStatusSchema,
   startedAt: isoDateSchema,
   submittedAt: isoDateSchema.nullable(),

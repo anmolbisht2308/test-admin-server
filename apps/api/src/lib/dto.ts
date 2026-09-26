@@ -136,6 +136,10 @@ export const toTestDto = (t: WithId<TestAttrs>): Test => ({
   isFree: t.isFree,
   publishAt: t.publishAt ? t.publishAt.toISOString() : null,
   publishedAt: t.publishedAt ? t.publishedAt.toISOString() : null,
+  cutoffs: {
+    overall: t.cutoffs?.overall ?? null,
+    sections: { ...(t.cutoffs?.sections ?? {}) },
+  },
   createdAt: t.createdAt.toISOString(),
   updatedAt: t.updatedAt.toISOString(),
 });

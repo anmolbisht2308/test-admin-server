@@ -1,4 +1,4 @@
-import { DUPLICATE_FLAGS, contentFlags, questionHash } from "@mockprep/core";
+import { STICKY_FLAGS, contentFlags, questionHash } from "@mockprep/core";
 import { questionInputSchema, type ExamFamily, type QuestionData } from "@mockprep/types";
 import { Types } from "mongoose";
 import { toQuestionDto } from "../lib/dto.js";
@@ -66,7 +66,7 @@ async function flagsAfterEdit(
     .select({ "templateSnapshot.optionCount": 1 })
     .lean();
   const optionCount = test?.templateSnapshot.optionCount ?? data.options.length;
-  const kept = flags.filter((f) => (DUPLICATE_FLAGS as readonly string[]).includes(f));
+  const kept = flags.filter((f) => (STICKY_FLAGS as readonly string[]).includes(f));
   return [...contentFlags(data, optionCount), ...kept];
 }
 

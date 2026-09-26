@@ -10,6 +10,8 @@ import { adminQuestionImportRouter } from "./questionImport.js";
 import { adminQuestionsRouter } from "./questions.js";
 import { adminSeriesRouter } from "./series.js";
 import { adminTestsRouter } from "./tests.js";
+import { adminReportsRouter } from "./reports.js";
+import type { EnqueueRescore } from "../../services/scoreQueue.js";
 import { adminUploadsRouter, type EnqueueIngest } from "./uploads.js";
 import { adminTaxonomyRouter } from "./taxonomy.js";
 import { adminTemplatesRouter } from "./templates.js";
@@ -19,6 +21,7 @@ export function adminRouter(
   ctx: AppContext,
   storage: Storage,
   enqueueIngest: EnqueueIngest,
+  enqueueRescore: EnqueueRescore,
 ): Router {
   const router = Router();
   router.use("/auth", adminAuthRouter(ctx));
@@ -31,7 +34,8 @@ export function adminRouter(
   // Import routes first: "/questions/import/template" must not match "/questions/:id".
   guarded.use("/questions", adminQuestionImportRouter());
   guarded.use("/questions", adminQuestionsRouter());
-  guarded.use("/tests", adminTestsRouter());
+  guarded.use("/tests", adminTestsRouter(ctx, enqueueRescore));
+  guarded.use("/reports", adminReportsRouter());
   guarded.use("/series", adminSeriesRouter());
   guarded.use("/figures", adminFiguresRouter(storage));
   guarded.use("/uploads", adminUploadsRouter(ctx, storage, enqueueIngest));

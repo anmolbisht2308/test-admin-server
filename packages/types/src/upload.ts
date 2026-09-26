@@ -24,6 +24,9 @@ export const validationFlagSchema = z.enum([
   "latex",
   "duplicate",
   "duplicate_in_paper",
+  // After publishing (Phase 6): students' error reports, nightly stats.
+  "reported",
+  "suspect_key",
 ]);
 export type ValidationFlag = z.infer<typeof validationFlagSchema>;
 
@@ -37,6 +40,8 @@ export const FLAG_LABELS: Record<ValidationFlag, string> = {
   latex: "Check maths ($ unbalanced)",
   duplicate: "Already in bank",
   duplicate_in_paper: "Repeated in paper",
+  reported: "Reported by students",
+  suspect_key: "Answer key looks wrong (stats)",
 };
 
 export const uploadFileKindSchema = z.enum(["paper", "key", "solutions"]);

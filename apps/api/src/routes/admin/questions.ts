@@ -13,9 +13,10 @@ import { toQuestionDto } from "../../lib/dto.js";
 import { conflictError, notFoundError } from "../../lib/httpError.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { getAuth, requireRole } from "../../middleware/auth.js";
-import { QuestionModel, type QuestionAttrs } from "@mockprep/core";
+import { QuestionModel, QuestionStatsModel, type QuestionAttrs } from "@mockprep/core";
 import { TaxonomyModel } from "@mockprep/core";
 import { recordAudit, recordAuditMany } from "../../services/audit.js";
+import type { QuestionStatsResponse } from "@mockprep/types";
 import {
   approveQuestion,
   createQuestion,
@@ -187,6 +188,31 @@ export function adminQuestionsRouter(): Router {
         after: dto,
       });
       const body: QuestionSaveResponse = { question: dto, versioned: false };
+      res.json(body);
+    }),
+  );
+
+  router.get(
+    "/:id/stats",
+    asyncHandler(async (req, res) => {
+      const stats = await QuestionStatsModel.findOne({
+        questionId: parseId(req.params.id, "Question"),
+      }).lean();
+      const body: QuestionStatsResponse = {
+        stats: stats
+          ? {
+              questionId: stats.questionId.toString(),
+              attempts: stats.attempts,
+              correct: stats.correct,
+              accuracy: stats.accuracy,
+              avgTimeMs: stats.avgTimeMs,
+              optionSplit: [...stats.optionSplit],
+              skipped: stats.skipped,
+              discrimination: stats.discrimination,
+              computedAt: stats.computedAt.toISOString(),
+            }
+          : null,
+      };
       res.json(body);
     }),
   );

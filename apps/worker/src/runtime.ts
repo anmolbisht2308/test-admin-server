@@ -10,7 +10,12 @@ import { Queue, Worker } from "bullmq";
 import { Redis } from "ioredis";
 import type { Logger } from "pino";
 import { createGeminiClient, type AiClient, type RetryOptions } from "./ingest/aiExtractor.js";
-import { createAttemptHousekeeping, createScoreProcessor } from "./jobs/attempts.js";
+import {
+  createAttemptHousekeeping,
+  createRescoreProcessor,
+  createScoreProcessor,
+  createStatsProcessor,
+} from "./jobs/attempts.js";
 import { createIngestProcessor } from "./jobs/ingest.js";
 import { createPingProcessor } from "./jobs/ping.js";
 
@@ -34,7 +39,7 @@ export interface WorkerRuntimeOptions {
   /** PDF ingest (needs a Mongo connection opened by the caller). Omit to run only ping. */
   ingest?: IngestOptions;
   /** Test attempts: scoring + answer flush / auto-submit (needs Mongo). */
-  attempts?: { housekeepingEveryMs?: number };
+  attempts?: { housekeepingEveryMs?: number; statsCron?: string };
 }
 
 export interface WorkerRuntime {
@@ -88,13 +93,15 @@ export async function startWorkers({
 
   let store: Redis | undefined;
   let housekeepingQueue: Queue | undefined;
+  let statsQueue: Queue | undefined;
   if (attempts) {
     // Plain commands (answer store) on their own connection, apart from BullMQ's.
     store = new Redis(redisUrl, { maxRetriesPerRequest: 3 });
     store.on("error", (err) => logger.warn({ err }, "attempt store redis error"));
     const scoreQueue = new Queue<ScoreJobData>(QUEUE.score, { connection });
     housekeepingQueue = new Queue(QUEUE.attempts, { connection });
-    queues.push(scoreQueue, housekeepingQueue);
+    statsQueue = new Queue(QUEUE.stats, { connection });
+    queues.push(scoreQueue, housekeepingQueue, statsQueue);
     const enqueueScore = (attemptId: string) =>
       scoreQueue.add(
         "score",
@@ -108,7 +115,12 @@ export async function startWorkers({
         },
       );
     workers.push(
-      new Worker(QUEUE.score, createScoreProcessor(logger), { connection, concurrency }),
+      new Worker(QUEUE.score, createScoreProcessor(store, logger), { connection, concurrency }),
+      new Worker(QUEUE.rescore, createRescoreProcessor(store, logger), {
+        connection,
+        concurrency: 1,
+      }),
+      new Worker(QUEUE.stats, createStatsProcessor(logger), { connection, concurrency: 1 }),
       new Worker(QUEUE.attempts, createAttemptHousekeeping(store, enqueueScore, logger), {
         connection,
         concurrency: 1,
@@ -122,6 +134,14 @@ export async function startWorkers({
       "attempts-housekeeping",
       { every: attempts?.housekeepingEveryMs ?? 30_000 },
       { name: "housekeeping", opts: { removeOnComplete: 10, removeOnFail: 50 } },
+    );
+  }
+  if (statsQueue) {
+    // Nightly at 02:30 IST (21:00 UTC), when few students are online.
+    await statsQueue.upsertJobScheduler(
+      "question-stats",
+      { pattern: attempts?.statsCron ?? "0 21 * * *", tz: "UTC" },
+      { name: "stats", opts: { removeOnComplete: 10, removeOnFail: 10 } },
     );
   }
   logger.info({ queues: workers.map((w) => w.name), source }, "worker started");

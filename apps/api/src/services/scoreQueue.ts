@@ -1,4 +1,4 @@
-import { QUEUE, type ScoreJobData } from "@mockprep/types";
+import { QUEUE, type RescoreJobData, type ScoreJobData } from "@mockprep/types";
 import { Queue } from "bullmq";
 import type { Redis } from "ioredis";
 
@@ -19,6 +19,22 @@ export function createScoreEnqueuer(redis: Redis): EnqueueScore {
         removeOnComplete: 1000,
         removeOnFail: 1000,
       },
+    );
+  };
+}
+
+/** Queues a re-score of every attempt of a test (after an answer-key change). */
+export type EnqueueRescore = (testId: string) => Promise<void>;
+
+export function createRescoreEnqueuer(redis: Redis): EnqueueRescore {
+  let queue: Queue<RescoreJobData> | undefined;
+  return async (testId) => {
+    queue ??= new Queue<RescoreJobData>(QUEUE.rescore, { connection: redis });
+    // A fresh job each time: a second key change while one runs must re-score again.
+    await queue.add(
+      "rescore",
+      { testId },
+      { attempts: 3, removeOnComplete: 100, removeOnFail: 100 },
     );
   };
 }

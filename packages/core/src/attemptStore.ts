@@ -4,6 +4,7 @@ import { Types } from "mongoose";
 import { AttemptModel, type AttemptAttrs } from "./models/attempt.js";
 import { QuestionModel } from "./models/question.js";
 import { TestModel, type TestAttrs } from "./models/test.js";
+import { addToRanks, rebuildRanks } from "./ranks.js";
 import { scoreAttempt, type ScoringAnswer } from "./scoring.js";
 
 /*
@@ -245,15 +246,12 @@ export async function submitAttempt(
   return updated.modifiedCount === 1;
 }
 
-/** Scores a submitted attempt and stores the result. Idempotent. */
-export async function scoreSubmittedAttempt(id: string): Promise<boolean> {
-  const attempt = await AttemptModel.findById(id).lean<AttemptDoc>();
-  if (!attempt || attempt.status !== "submitted") return false;
-  const test = await TestModel.findById(attempt.testId)
-    .select({ sections: 1, templateSnapshot: 1 })
-    .lean<TestShape>();
-  if (!test) throw new Error(`test ${attempt.testId.toString()} not found`);
-  const ids = test.sections.flatMap((s) => s.questionIds);
+/** Scores one attempt (submitted, or already scored when `force`). Returns the new score. */
+async function scoreOne(attempt: AttemptDoc, test: TestShape): Promise<number> {
+  const excluded = new Set(attempt.excluded.map(String));
+  const ids = test.sections
+    .flatMap((s) => s.questionIds)
+    .filter((id) => !excluded.has(id.toString()));
   const questions = new Map(
     (
       await QuestionModel.find({ _id: { $in: ids } })
@@ -264,7 +262,7 @@ export async function scoreSubmittedAttempt(id: string): Promise<boolean> {
   const sections = test.sections.map((s) => ({
     name: s.name,
     questions: s.questionIds.flatMap((qid) => {
-      const q = questions.get(qid.toString());
+      const q = excluded.has(qid.toString()) ? undefined : questions.get(qid.toString());
       return q
         ? [{ id: qid.toString(), type: q.type, correct: q.correct, numAnswer: q.numAnswer ?? null }]
         : [];
@@ -280,8 +278,8 @@ export async function scoreSubmittedAttempt(id: string): Promise<boolean> {
     test.templateSnapshot,
     (end - attempt.startedAt.getTime()) / 1000,
   );
-  const res = await AttemptModel.updateOne(
-    { _id: id, status: "submitted" },
+  await AttemptModel.updateOne(
+    { _id: attempt._id },
     {
       $set: {
         status: "scored",
@@ -294,7 +292,52 @@ export async function scoreSubmittedAttempt(id: string): Promise<boolean> {
       },
     },
   );
-  return res.modifiedCount === 1;
+  return scored.result.score;
+}
+
+const loadTest = (testId: Types.ObjectId) =>
+  TestModel.findById(testId).select({ sections: 1, templateSnapshot: 1 }).lean<TestShape>();
+
+/**
+ * Scores a submitted attempt and stores the result; first attempts join the test's ranks.
+ * Idempotent (an attempt that is already scored is left alone).
+ */
+export async function scoreSubmittedAttempt(id: string, redis?: Redis): Promise<boolean> {
+  // Claim it (scoredAt set while still "submitted") so two workers never score it twice; a claim
+  // older than 5 minutes (crashed worker) can be taken over.
+  const now = Date.now();
+  const attempt = await AttemptModel.findOneAndUpdate(
+    {
+      _id: id,
+      status: "submitted",
+      $or: [{ scoredAt: null }, { scoredAt: { $lt: new Date(now - 5 * 60_000) } }],
+    },
+    { $set: { scoredAt: new Date(now) } },
+  ).lean<AttemptDoc>();
+  if (!attempt) return false;
+  const test = await loadTest(attempt.testId);
+  if (!test) throw new Error(`test ${attempt.testId.toString()} not found`);
+  const score = await scoreOne(attempt, test);
+  if (redis && attempt.firstAttempt && !attempt.practice) {
+    await addToRanks(redis, attempt.testId.toString(), id, score);
+  }
+  return true;
+}
+
+/** Re-scores every submitted/scored attempt of a test (after an answer-key change) and rebuilds ranks. */
+export async function rescoreTest(redis: Redis, testId: string): Promise<number> {
+  const test = await loadTest(new Types.ObjectId(testId));
+  if (!test) throw new Error(`test ${testId} not found`);
+  const cursor = AttemptModel.find({ testId, status: { $in: ["submitted", "scored"] } })
+    .lean<AttemptDoc[]>()
+    .cursor();
+  let count = 0;
+  for await (const attempt of cursor) {
+    await scoreOne(attempt, test);
+    count += 1;
+  }
+  await rebuildRanks(redis, testId);
+  return count;
 }
 
 /** In-progress attempts whose time (plus grace) is over. */

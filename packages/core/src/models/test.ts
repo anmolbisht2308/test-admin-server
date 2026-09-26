@@ -13,6 +13,10 @@ export interface TestAttrs {
   isFree: boolean;
   publishAt: Date | null;
   publishedAt: Date | null;
+  cutoffs: { overall: number | null; sections: Record<string, number> };
+  /** status "practice": the student it was made for, and the attempt it came from. */
+  ownerId: Types.ObjectId | null;
+  sourceAttemptId: Types.ObjectId | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -40,6 +44,12 @@ const testSchema = new Schema<TestAttrs>(
     isFree: { type: Boolean, default: true },
     publishAt: { type: Date, default: null },
     publishedAt: { type: Date, default: null },
+    cutoffs: {
+      overall: { type: Number, default: null },
+      sections: { type: Schema.Types.Mixed, default: {} },
+    },
+    ownerId: { type: Schema.Types.ObjectId, ref: "User", default: null },
+    sourceAttemptId: { type: Schema.Types.ObjectId, ref: "Attempt", default: null },
   },
   { timestamps: true, minimize: false },
 );

@@ -6,6 +6,10 @@ export const QUEUE = {
   ingest: "ingest",
   /** Scores a submitted attempt. */
   score: "score",
+  /** Re-scores every attempt of a test and rebuilds its ranks (after an answer-key change). */
+  rescore: "rescore",
+  /** Nightly per-question statistics. */
+  stats: "stats",
   /** Repeating housekeeping: flush Redis answers to Mongo, auto-submit expired attempts. */
   attempts: "attempts",
 } as const;
@@ -35,3 +39,6 @@ export const ingestJobId = (uploadId: string, run: number) => `ingest-${uploadId
 
 export const scoreJobDataSchema = z.object({ attemptId: z.string().regex(/^[a-f\d]{24}$/i) });
 export type ScoreJobData = z.infer<typeof scoreJobDataSchema>;
+
+export const rescoreJobDataSchema = z.object({ testId: z.string().regex(/^[a-f\d]{24}$/i) });
+export type RescoreJobData = z.infer<typeof rescoreJobDataSchema>;

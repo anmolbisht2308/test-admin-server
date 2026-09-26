@@ -1,19 +1,21 @@
 import {
+  computeQuestionStats,
   flushDirtyAttempts,
   overdueAttemptIds,
+  rescoreTest,
   scoreSubmittedAttempt,
   submitAttempt,
 } from "@mockprep/core";
-import { scoreJobDataSchema } from "@mockprep/types";
+import { rescoreJobDataSchema, scoreJobDataSchema } from "@mockprep/types";
 import type { Job } from "bullmq";
 import type { Redis } from "ioredis";
 import type { Logger } from "pino";
 
-/** "score" queue: scores one submitted attempt. */
-export function createScoreProcessor(logger: Logger) {
+/** "score" queue: scores one submitted attempt (first attempts join the test's ranks). */
+export function createScoreProcessor(store: Redis, logger: Logger) {
   return async (job: Job) => {
     const { attemptId } = scoreJobDataSchema.parse(job.data);
-    const scored = await scoreSubmittedAttempt(attemptId);
+    const scored = await scoreSubmittedAttempt(attemptId, store);
     logger.debug({ attemptId, scored }, "attempt scored");
   };
 }
@@ -39,5 +41,26 @@ export function createAttemptHousekeeping(
     }
     if (flushed || submitted) logger.info({ flushed, submitted }, "attempts housekeeping");
     return { flushed, submitted };
+  };
+}
+
+/** "rescore" queue: re-scores a whole test after an answer-key change and rebuilds its ranks. */
+export function createRescoreProcessor(store: Redis, logger: Logger) {
+  return async (job: Job) => {
+    const { testId } = rescoreJobDataSchema.parse(job.data);
+    const count = await rescoreTest(store, testId);
+    // Drop cached benchmarks so results show the new numbers at once.
+    await store.del(`bench:${testId}`, `correct:${testId}`);
+    logger.info({ testId, attempts: count }, "test re-scored");
+    return { attempts: count };
+  };
+}
+
+/** "stats" queue, nightly: per-question statistics and "suspect_key" flags. */
+export function createStatsProcessor(logger: Logger) {
+  return async () => {
+    const result = await computeQuestionStats();
+    logger.info(result, "question stats computed");
+    return result;
   };
 }

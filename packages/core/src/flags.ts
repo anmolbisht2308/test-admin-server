@@ -39,3 +39,10 @@ export function contentFlags(q: FlaggableQuestion, optionCount: number): Validat
 }
 
 export const DUPLICATE_FLAGS: readonly ValidationFlag[] = ["duplicate", "duplicate_in_paper"];
+
+/** Flags an edit doesn't recompute (bank lookups, student reports, stats): kept as they are. */
+export const STICKY_FLAGS: readonly ValidationFlag[] = [
+  ...DUPLICATE_FLAGS,
+  "reported",
+  "suspect_key",
+];

@@ -26,7 +26,13 @@ import { localStorageRouter } from "./routes/storage.js";
 import type { EnqueueIngest } from "./routes/admin/uploads.js";
 import { createIngestEnqueuer } from "./services/ingestQueue.js";
 import { attemptsRouter } from "./routes/attempts.js";
-import { createScoreEnqueuer, type EnqueueScore } from "./services/scoreQueue.js";
+import {
+  createRescoreEnqueuer,
+  createScoreEnqueuer,
+  type EnqueueRescore,
+  type EnqueueScore,
+} from "./services/scoreQueue.js";
+import { studentContentRouter } from "./routes/studentContent.js";
 
 export interface AppDeps {
   env: Env;
@@ -45,6 +51,8 @@ export interface AppDeps {
   enqueueIngest?: EnqueueIngest;
   /** Queues attempt scoring. Defaults to the BullMQ "score" queue on `redis`. */
   enqueueScore?: EnqueueScore;
+  /** Queues re-scoring a whole test. Defaults to the BullMQ "rescore" queue on `redis`. */
+  enqueueRescore?: EnqueueRescore;
   /** Extra routers mounted under /api after the feature routers. */
   routers?: Router[];
 }
@@ -118,8 +126,12 @@ export function createApp(deps: AppDeps): Express {
   app.use("/api/attempts", attemptsRouter(ctx, deps.enqueueScore ?? createScoreEnqueuer(redis)));
   app.use("/api/exams", catalogueRouter());
   app.use("/api/tests", publicTestsRouter());
+  app.use("/api", studentContentRouter(ctx));
   const enqueueIngest = deps.enqueueIngest ?? createIngestEnqueuer(redis);
-  app.use("/api/admin", adminRouter(ctx, storage, enqueueIngest));
+  app.use(
+    "/api/admin",
+    adminRouter(ctx, storage, enqueueIngest, deps.enqueueRescore ?? createRescoreEnqueuer(redis)),
+  );
   for (const router of routers) app.use("/api", router);
 
   app.use(notFound);

@@ -1,4 +1,8 @@
 import {
+  answerKeyInputSchema,
+  isNumericType,
+  testCutoffsSchema,
+  type RescoreResponse,
   testCreateInputSchema,
   testFillInputSchema,
   testPublishInputSchema,
@@ -19,7 +23,9 @@ import { getAuth, requireRole } from "../../middleware/auth.js";
 import { ExamModel } from "@mockprep/core";
 import { ExamTemplateModel } from "@mockprep/core";
 import { QuestionModel } from "@mockprep/core";
-import { TestModel, type TestAttrs } from "@mockprep/core";
+import { AttemptModel, TestModel, type TestAttrs } from "@mockprep/core";
+import type { AppContext } from "../../context.js";
+import type { EnqueueRescore } from "../../services/scoreQueue.js";
 import { recordAudit, recordAuditMany } from "../../services/audit.js";
 import { approveQuestion } from "../../services/questions.js";
 import {
@@ -43,7 +49,7 @@ async function detail(test: TestDoc): Promise<AdminTestResponse> {
 
 async function findTest(id: unknown) {
   const test = await TestModel.findById(parseId(id, "Test"));
-  if (!test) throw notFoundError("Test");
+  if (!test || test.status === "practice") throw notFoundError("Test");
   return test;
 }
 
@@ -52,7 +58,7 @@ const assertDraft = (test: TestAttrs) => {
 };
 
 /** /api/admin/tests */
-export function adminTestsRouter(): Router {
+export function adminTestsRouter(ctx: AppContext, enqueueRescore: EnqueueRescore): Router {
   const router = Router();
   const write = requireRole(...CONTENT_WRITERS);
 
@@ -60,7 +66,11 @@ export function adminTestsRouter(): Router {
     "/",
     asyncHandler(async (req, res) => {
       const examKey = typeof req.query.examKey === "string" ? req.query.examKey : undefined;
-      const tests = await TestModel.find(examKey ? { examKey } : {})
+      // Students' private practice tests are not admin content.
+      const tests = await TestModel.find({
+        status: { $ne: "practice" },
+        ...(examKey ? { examKey } : {}),
+      })
         .sort({ updatedAt: -1 })
         .limit(500)
         .lean();
@@ -343,6 +353,123 @@ export function adminTestsRouter(): Router {
         before,
       });
       res.status(204).end();
+    }),
+  );
+
+  router.put(
+    "/:id/cutoffs",
+    write,
+    asyncHandler(async (req, res) => {
+      const cutoffs = testCutoffsSchema.parse(req.body);
+      const test = await findTest(req.params.id);
+      const names = new Set(test.sections.map((s) => s.name));
+      const unknown = Object.keys(cutoffs.sections).filter((n) => !names.has(n));
+      if (unknown.length) throw new HttpError(400, "Unknown sections", { sections: unknown });
+      const before = toTestDto(test);
+      test.cutoffs = cutoffs;
+      test.markModified("cutoffs");
+      await test.save();
+      await recordAudit({
+        actorId: getAuth(req).userId,
+        entity: "test",
+        entityId: test.id,
+        action: "update",
+        before,
+        after: toTestDto(test),
+      });
+      res.json(await detail(test));
+    }),
+  );
+
+  /**
+   * Corrects answer keys in place (a correction, not a content change, so no new version even in
+   * published tests), then re-scores every attempt and rebuilds ranks in one worker job.
+   */
+  router.put(
+    "/:id/answer-key",
+    write,
+    asyncHandler(async (req, res) => {
+      const { changes } = answerKeyInputSchema.parse(req.body);
+      const test = await findTest(req.params.id);
+      const inTest = new Set(allQuestionIds(test).map(String));
+      const outside = changes.filter((c) => !inTest.has(c.questionId));
+      if (outside.length) {
+        throw new HttpError(400, "Some questions are not in this test", {
+          questionIds: outside.map((c) => c.questionId),
+        });
+      }
+      const actorId = getAuth(req).userId;
+      const audits = [];
+      for (const change of changes) {
+        const q = await QuestionModel.findById(change.questionId);
+        if (!q) throw notFoundError("Question");
+        const before = toQuestionDto(q);
+        const numeric = isNumericType(q.type);
+        if (numeric) {
+          if (!change.numAnswer || change.numAnswer.min > change.numAnswer.max) {
+            throw new HttpError(400, "Numeric questions need numAnswer {min ≤ max}", {
+              questionId: change.questionId,
+            });
+          }
+          q.numAnswer = change.numAnswer;
+        } else {
+          const correct = [...new Set(change.correct ?? [])].sort((a, b) => a - b);
+          if (correct.length === 0 || correct.some((c) => c >= q.options.length)) {
+            throw new HttpError(400, "Choose existing options as the answer", {
+              questionId: change.questionId,
+            });
+          }
+          if (q.type === "mcq_single" && correct.length > 1) {
+            throw new HttpError(400, "Single-answer questions have one correct option", {
+              questionId: change.questionId,
+            });
+          }
+          q.correct = correct;
+        }
+        q.answerSource = "manual";
+        q.flags = q.flags.filter(
+          (f) => f !== "suspect_key" && f !== "no_answer" && f !== "ai_answer",
+        );
+        await q.save();
+        audits.push({
+          actorId,
+          entity: "question",
+          entityId: q.rootId.toString(),
+          action: "update" as const,
+          before,
+          after: { ...toQuestionDto(q), answerKeyChange: true },
+        });
+      }
+      await recordAuditMany(audits);
+      const attempts = await AttemptModel.countDocuments({
+        testId: test._id,
+        status: { $in: ["submitted", "scored"] },
+      });
+      if (attempts > 0) await enqueueRescore(test.id as string);
+      const body: RescoreResponse = { queued: attempts > 0, attempts };
+      res.json(body);
+    }),
+  );
+
+  router.post(
+    "/:id/rescore",
+    write,
+    asyncHandler(async (req, res) => {
+      const test = await findTest(req.params.id);
+      const attempts = await AttemptModel.countDocuments({
+        testId: test._id,
+        status: { $in: ["submitted", "scored"] },
+      });
+      if (attempts > 0) await enqueueRescore(test.id as string);
+      await recordAudit({
+        actorId: getAuth(req).userId,
+        entity: "test",
+        entityId: test.id,
+        action: "update",
+        after: { rescore: attempts },
+      });
+      const body: RescoreResponse = { queued: attempts > 0, attempts };
+      res.json(body);
     }),
   );
 

@@ -10,6 +10,12 @@ export interface AttemptAttrs {
   userId: Types.ObjectId;
   testId: Types.ObjectId;
   status: AttemptStatus;
+  /** The student's first attempt of this test: the only one that is ranked. */
+  firstAttempt: boolean;
+  /** Attempt of a private practice test (never ranked). */
+  practice: boolean;
+  /** Questions left out of this attempt's paper (reported, under review): not scored. */
+  excluded: Types.ObjectId[];
   startedAt: Date;
   /** startedAt + template total time. Saves are refused after deadline + grace. */
   deadline: Date;
@@ -50,6 +56,9 @@ const attemptSchema = new Schema<AttemptAttrs>(
     userId: { type: Schema.Types.ObjectId, ref: "User", required: true },
     testId: { type: Schema.Types.ObjectId, ref: "Test", required: true },
     status: { type: String, default: "in_progress" },
+    firstAttempt: { type: Boolean, default: false },
+    practice: { type: Boolean, default: false },
+    excluded: { type: [Schema.Types.ObjectId], default: [] },
     startedAt: { type: Date, required: true },
     deadline: { type: Date, required: true },
     sectionIndex: { type: Number, default: 0 },
@@ -85,6 +94,7 @@ attemptSchema.index(
   { unique: true, partialFilterExpression: { status: "in_progress" }, name: "one_in_progress" },
 );
 attemptSchema.index({ status: 1, deadline: 1 });
-attemptSchema.index({ testId: 1, status: 1 });
+attemptSchema.index({ testId: 1, status: 1, firstAttempt: 1 });
+attemptSchema.index({ userId: 1, createdAt: -1 });
 
 export const AttemptModel = model<AttemptAttrs>("Attempt", attemptSchema, "attempts");
