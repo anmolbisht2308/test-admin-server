@@ -47,8 +47,12 @@ downloads a MongoDB binary the first time it runs. To use the docker compose Mon
 example offline, or when fastdl.mongodb.org is blocked), run:
 
 ```bash
-TEST_MONGODB_URI=mongodb://localhost:27017/mockprep-test pnpm test
+TEST_MONGODB_URI="mongodb://localhost:27017/mockprep-test?replicaSet=rs0" pnpm test
 ```
+
+**MongoDB must be a replica set**, because payments use transactions. The docker compose Mongo
+runs as a single-node replica set `rs0`, and its healthcheck initiates it. The in-memory test
+server is a replica set too. Atlas (M0 included) is always a replica set.
 
 ## Shared types (`@mockprep/types`)
 
@@ -133,18 +137,20 @@ setup. The paid setup for the commercial launch is `render.paid.yaml`, described
 5. Sign in to the admin panel with `SEED_ADMIN_EMAIL`. The first sign-in asks you to scan a QR
    code with an authenticator app (Google Authenticator, Authy, 1Password…).
 
-| Variable                                                      | Value                                                                                                  |
-| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `MONGODB_URI`                                                 | Atlas M0 SRV string                                                                                    |
-| `REDIS_URL`                                                   | Redis Cloud URL                                                                                        |
-| `CORS_ORIGINS`                                                | web + admin URLs, comma-separated (browsers use the Next proxy, so this only matters for direct calls) |
-| `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`                     | first superadmin. Password: 12+ chars with upper, lower and a digit                                    |
-| `GOOGLE_CLIENT_IDS`                                           | Google OAuth web client id (see the client README). Optional second sign-in method                     |
-| `BREVO_API_KEY`, `EMAIL_FROM`                                 | Brevo API key and verified sender address (`EMAIL_PROVIDER=brevo` is set by `render.yaml`)             |
-| `STORAGE_DRIVER`                                              | `s3` (R2 speaks the S3 protocol). Never `local` on Render: the disk is wiped on every deploy           |
-| `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_PUBLIC_BASE_URL` | R2: bucket name, `auto`, `https://<account-id>.r2.cloudflarestorage.com`, the public `r2.dev` URL      |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`                  | the R2 API token's keys (the S3 SDK reads these names)                                                 |
-| `GEMINI_API_KEY`                                              | optional: free Google AI Studio key for PDF uploads (see "How uploads work")                           |
+| Variable                                                         | Value                                                                                                  |
+| ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `MONGODB_URI`                                                    | Atlas M0 SRV string                                                                                    |
+| `REDIS_URL`                                                      | Redis Cloud URL                                                                                        |
+| `CORS_ORIGINS`                                                   | web + admin URLs, comma-separated (browsers use the Next proxy, so this only matters for direct calls) |
+| `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`                        | first superadmin. Password: 12+ chars with upper, lower and a digit                                    |
+| `GOOGLE_CLIENT_IDS`                                              | Google OAuth web client id (see the client README). Optional second sign-in method                     |
+| `BREVO_API_KEY`, `EMAIL_FROM`                                    | Brevo API key and verified sender address (`EMAIL_PROVIDER=brevo` is set by `render.yaml`)             |
+| `STORAGE_DRIVER`                                                 | `s3` (R2 speaks the S3 protocol). Never `local` on Render: the disk is wiped on every deploy           |
+| `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_PUBLIC_BASE_URL`    | R2: bucket name, `auto`, `https://<account-id>.r2.cloudflarestorage.com`, the public `r2.dev` URL      |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`                     | the R2 API token's keys (the S3 SDK reads these names)                                                 |
+| `GEMINI_API_KEY`                                                 | optional: free Google AI Studio key for PDF uploads (see "How uploads work")                           |
+| `PAYMENTS_PROVIDER`, `RAZORPAY_*`                                | `none` until you have keys, then `razorpay` (see "Payments")                                           |
+| `SELLER_ADDRESS`, `SELLER_GSTIN`, `SELLER_STATE`, `SELLER_EMAIL` | printed on invoices (GSTIN empty = "Not registered")                                                   |
 
 `render.yaml` also sets:
 
@@ -329,6 +335,47 @@ are regenerated with `pnpm --filter @mockprep/worker fixtures`.
   there. It comes back when an admin fixes or dismisses the reports.
 - **Nightly stats** run at 02:30 IST. A question gets the flag "suspect_key" when accuracy is
   under 5 % or a wrong option is chosen more often than the key (with 20+ attempts).
+
+## Payments (Razorpay)
+
+| Endpoint                                                      | What it does                                                    |
+| ------------------------------------------------------------- | --------------------------------------------------------------- |
+| `GET /api/plans`                                              | Active plans (public)                                           |
+| `POST /api/orders/quote`, `POST /api/orders`                  | Server-side price + coupon, then a Razorpay order               |
+| `POST /api/payments/verify`                                   | Checkout success handler: signature check → instant unlock      |
+| `POST /api/webhooks/razorpay`                                 | Source of truth: captured / failed / refund.processed           |
+| `GET /api/orders/:id`, `GET /api/me/access`                   | Order status + what the student can open                        |
+| `GET /api/me/purchases`, `…/:orderId/invoice?kind=`           | My purchases, invoice / credit note PDF                         |
+| `GET /api/me/referral`, `POST /api/me/referral/apply`         | Referral code; the friend's first paid order earns a coupon     |
+| `/api/admin/plans`, `/api/admin/coupons`                      | CRUD (superadmin, finance), audited                             |
+| `GET /api/admin/orders`, `POST …/:id/refund`                  | Orders with filters; full refund through Razorpay with a reason |
+| `GET/POST/DELETE /api/admin/entitlements`                     | Manual access for support cases, audited                        |
+| `GET /api/admin/revenue?from=&to=`                            | Daily (IST), by plan, coupon usage, refunds                     |
+| `POST /api/payments/fake/complete` (`PAYMENTS_PROVIDER=fake`) | Dev stand-in for Checkout. It also sends the signed webhook     |
+
+- **The client never sends an amount.** `orderCreateInputSchema` is strict, so an extra field
+  gets a 400. A webhook whose captured amount differs from the order is ignored.
+- **Exactly once.** Each order change runs in a MongoDB transaction together with its effects:
+  entitlement, coupon use, invoice number and referral reward. Every transition is conditional
+  (`created|failed → paid`, `paid → refunded`). Webhook event ids are stored in
+  `processedEvents` in the same transaction. A replay, Razorpay's retries, or verify racing the
+  webhook therefore change nothing the second time.
+- **Access:** a test is attemptable if it is free, or if an active entitlement (not revoked, not
+  expired) covers its exam (`all` for a pass). Otherwise `POST /api/attempts` returns a 403 with
+  `details.reason = "locked"`.
+- **Invoices:** prices include GST. The invoice shows taxable value plus 9 % CGST and 9 % SGST.
+  Numbers are gap-free per Indian financial year: `MP/2026-27/000001`, and credit notes
+  `MP/CN/2026-27/000001`. The worker `invoice` queue emails the PDF (pdf-lib) through the
+  email adapter. The PDF can be downloaded any time.
+- **Refunds:** admin refund → Razorpay refund API → once the refund is processed (immediately,
+  or on the `refund.processed` webhook), access is revoked and a credit note is issued. A
+  partial refund from the dashboard keeps access.
+
+**Razorpay test mode.** In the dashboard, switch to Test Mode and copy the API keys into
+`RAZORPAY_KEY_ID` and `RAZORPAY_KEY_SECRET`. Add a webhook to
+`https://<api>/api/webhooks/razorpay` for `payment.captured`, `payment.failed` and
+`refund.processed`, choose a secret, and set it as `RAZORPAY_WEBHOOK_SECRET`. Then set
+`PAYMENTS_PROVIDER=razorpay`. Test cards: see Razorpay's "Test card details".
 
 ## CI
 

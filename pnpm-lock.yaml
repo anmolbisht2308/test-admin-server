@@ -202,6 +202,9 @@ importers:
       '@mockprep/types':
         specifier: workspace:*
         version: link:../types
+      pdf-lib:
+        specifier: ^1.17.1
+        version: 1.17.1
     devDependencies:
       '@mockprep/config':
         specifier: workspace:*

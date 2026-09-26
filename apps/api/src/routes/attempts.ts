@@ -4,6 +4,7 @@ import {
   BookmarkModel,
   QuestionModel,
   buildAnalysis,
+  canAttempt,
   correctPercentByQuestion,
   getRank,
   testBenchmarks,
@@ -21,6 +22,7 @@ import {
   type AttemptMeta,
 } from "@mockprep/core";
 import {
+  LOCKED_REASON,
   practiceInputSchema,
   type AttemptAnalysis,
   type PracticeResponse,
@@ -75,13 +77,6 @@ async function paperJson(redis: Redis, testId: string): Promise<string> {
   const json = JSON.stringify(toStudentPaper(test, questions));
   await redis.set(key, json, "EX", PAPER_TTL_SEC);
   return json;
-}
-
-/** Free tests are open to every student. */
-function canAccess(_userId: string, test: { isFree: boolean }): boolean {
-  if (test.isFree) return true;
-  // TODO(phase 7): check the student's purchases (entitlement stub: allowed for now).
-  return true;
 }
 
 /** /api/attempts — a student taking a test. */
@@ -229,7 +224,12 @@ export function attemptsRouter(ctx: AppContext, enqueueScore: EnqueueScore): Rou
         (test?.status === "published" && (!test.publishAt || test.publishAt <= new Date())) ||
         (test?.status === "practice" && test.ownerId?.toString() === userId);
       if (!test || !visible) throw notFoundError("Test");
-      if (!canAccess(userId, test)) throw new HttpError(403, "Buy this test to take it");
+      if (!(await canAttempt(userId, test))) {
+        throw new HttpError(403, "Buy a plan for this exam to take this test", {
+          reason: LOCKED_REASON,
+          examKey: test.examKey,
+        });
+      }
       await startAttempt(res, userId, test);
     }),
   );

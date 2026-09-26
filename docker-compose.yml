@@ -2,12 +2,22 @@
 services:
   mongo:
     image: mongo:7
+    # Single-node replica set: payments use MongoDB transactions (Atlas is a replica set too).
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     ports:
       - "27017:27017"
     volumes:
       - mongo-data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      # Also initiates the replica set on first start.
+      test:
+        [
+          "CMD",
+          "mongosh",
+          "--quiet",
+          "--eval",
+          "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] }).ok }",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5

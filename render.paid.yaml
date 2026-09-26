@@ -54,6 +54,24 @@ services:
         sync: false
       - key: EMAIL_FROM_NAME
         value: mockprep
+      - key: PAYMENTS_PROVIDER
+        value: razorpay
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: SELLER_NAME
+        value: mockprep
+      - key: SELLER_ADDRESS
+        sync: false
+      - key: SELLER_GSTIN
+        sync: false
+      - key: SELLER_STATE
+        sync: false
+      - key: SELLER_EMAIL
+        sync: false
       # Figures: use s3 in production (Render's disk is wiped on every deploy).
       - key: STORAGE_DRIVER
         sync: false
@@ -117,6 +135,23 @@ services:
       - key: AWS_ACCESS_KEY_ID
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      # Invoice emails (same Brevo settings as the api).
+      - key: EMAIL_PROVIDER
+        value: brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: SELLER_NAME
+        value: mockprep
+      - key: SELLER_ADDRESS
+        sync: false
+      - key: SELLER_GSTIN
+        sync: false
+      - key: SELLER_STATE
+        sync: false
+      - key: SELLER_EMAIL
         sync: false
       # PDF → test: free Google AI Studio key (https://aistudio.google.com/apikey). Leave empty to
       # use the free text parser (text PDFs only; scans and image keys need the key).

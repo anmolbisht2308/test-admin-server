@@ -58,6 +58,27 @@ services:
         sync: false
       - key: EMAIL_FROM_NAME
         value: mockprep
+      # Payments: none until Razorpay keys are set, then razorpay (test keys work on free hosting).
+      # Webhook URL: https://<this service>/api/webhooks/razorpay (payment.captured, payment.failed,
+      # refund.processed).
+      - key: PAYMENTS_PROVIDER
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: SELLER_NAME
+        value: mockprep
+      - key: SELLER_ADDRESS
+        sync: false
+      - key: SELLER_GSTIN
+        sync: false
+      - key: SELLER_STATE
+        sync: false
+      - key: SELLER_EMAIL
+        sync: false
       # Figures on Cloudflare R2 (free tier, S3-compatible): STORAGE_DRIVER=s3, S3_REGION=auto,
       # S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com, S3_PUBLIC_BASE_URL=https://pub-….r2.dev
       - key: STORAGE_DRIVER

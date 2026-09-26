@@ -24,6 +24,17 @@ export const envSchema = z.object({
   GEMINI_MODEL: z.string().default("gemini-flash-latest"),
   /** Pages per AI request (chunks overlap by one page). */
   CHUNK_PAGES: z.coerce.number().int().min(2).max(30).default(6),
+
+  // ----- invoice emails (same values as the api) -----
+  EMAIL_PROVIDER: z.enum(["console", "brevo"]).default("console"),
+  BREVO_API_KEY: z.string().optional(),
+  EMAIL_FROM: z.email().optional(),
+  EMAIL_FROM_NAME: z.string().default("mockprep"),
+  SELLER_NAME: z.string().default("mockprep"),
+  SELLER_ADDRESS: z.string().default(""),
+  SELLER_GSTIN: z.string().default(""),
+  SELLER_STATE: z.string().default(""),
+  SELLER_EMAIL: z.string().default(""),
 });
 
 export type Env = z.infer<typeof envSchema>;

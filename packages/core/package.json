@@ -22,7 +22,8 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1141.0",
     "@aws-sdk/s3-request-presigner": "^3.1141.0",
-    "@mockprep/types": "workspace:*"
+    "@mockprep/types": "workspace:*",
+    "pdf-lib": "^1.17.1"
   },
   "peerDependencies": {
     "ioredis": "^5.8.0",

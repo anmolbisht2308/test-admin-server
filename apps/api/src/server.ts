@@ -1,7 +1,8 @@
 import type { WorkerRuntime } from "@mockprep/worker/runtime";
 import mongoose from "mongoose";
 import { createApp } from "./app.js";
-import { connectMongo, createStorage, isMongoUp } from "@mockprep/core";
+import { connectMongo, createEmailSender, createStorage, isMongoUp } from "@mockprep/core";
+import { sellerFromEnv } from "./services/invoices.js";
 import { loadEnv } from "./env.js";
 import { createLogger } from "./logger.js";
 import { createRedis, pingRedis } from "./redis.js";
@@ -66,6 +67,7 @@ async function startEmbeddedWorkers() {
       chunkPages: env.CHUNK_PAGES,
     },
     attempts: {},
+    invoices: { email: createEmailSender(env, logger), seller: sellerFromEnv(env) },
   });
 }
 

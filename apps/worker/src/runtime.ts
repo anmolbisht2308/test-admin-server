@@ -17,9 +17,10 @@ import {
   createStatsProcessor,
 } from "./jobs/attempts.js";
 import { createIngestProcessor } from "./jobs/ingest.js";
+import { createInvoiceProcessor, type InvoiceOptions } from "./jobs/invoice.js";
 import { createPingProcessor } from "./jobs/ping.js";
 
-export { createGeminiClient, type AiClient };
+export { createGeminiClient, type AiClient, type InvoiceOptions };
 
 export interface IngestOptions {
   /** Where uploaded papers are read from (the api's storage driver). */
@@ -40,6 +41,8 @@ export interface WorkerRuntimeOptions {
   ingest?: IngestOptions;
   /** Test attempts: scoring + answer flush / auto-submit (needs Mongo). */
   attempts?: { housekeepingEveryMs?: number; statsCron?: string };
+  /** Invoice / credit note emails (needs Mongo). */
+  invoices?: InvoiceOptions;
 }
 
 export interface WorkerRuntime {
@@ -58,6 +61,7 @@ export async function startWorkers({
   source,
   ingest,
   attempts,
+  invoices,
 }: WorkerRuntimeOptions): Promise<WorkerRuntime> {
   // BullMQ workers need maxRetriesPerRequest: null so blocking commands never time out.
   const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
@@ -81,6 +85,14 @@ export async function startWorkers({
         connection,
         concurrency: 1,
         lockDuration: 120_000,
+      }),
+    );
+  }
+  if (invoices) {
+    workers.push(
+      new Worker(QUEUE.invoice, createInvoiceProcessor(invoices, logger), {
+        connection,
+        concurrency: 2,
       }),
     );
   }

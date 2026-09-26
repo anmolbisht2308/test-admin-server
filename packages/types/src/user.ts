@@ -21,5 +21,12 @@ export const onboardingInputSchema = z.object({
   name: z.string().trim().min(2, "enter your name").max(80),
   targetExamSlugs: z.array(slugSchema).min(1, "pick at least one exam").max(10),
   language: languageSchema,
+  /** A friend's referral code (from a ?ref= link). */
+  referralCode: z
+    .string()
+    .trim()
+    .toUpperCase()
+    .regex(/^[A-Z0-9]{6,12}$/)
+    .optional(),
 });
 export type OnboardingInput = z.infer<typeof onboardingInputSchema>;

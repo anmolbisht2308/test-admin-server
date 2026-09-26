@@ -10,13 +10,8 @@ Core differentiator: an admin uploads a question-paper PDF (+ optional answer ke
 the system creates a publish-ready test with minimal manual work (review only flagged questions).
 Content is bilingual (English + Hindi). Most students are on low-end Android phones on slow networks.
 
-Exam families:
-
-- Banking: SBI PO / Clerk, IBPS PO / Clerk
-- SSC: CGL, CHSL
-- UPSC Prelims: GS Paper I + CSAT
-- Defence: NDA, CDS
-- Engineering: JEE Main, JEE Advanced
+Exam families: Banking (SBI PO / Clerk, IBPS PO / Clerk) · SSC (CGL, CHSL) · UPSC Prelims
+(GS Paper I + CSAT) · Defence (NDA, CDS) · Engineering (JEE Main, JEE Advanced).
 
 ## 2. Two repos, one system
 
@@ -33,8 +28,8 @@ It is released as a tarball on a GitHub Release `types-v<version>` (workflow
 new). The client pins the release URL. Public repo → no npm token anywhere. Never copy schemas into
 the client. For local cross-repo work, `pnpm link` the local package into the client checkout.
 
-A change to an API contract lands here first: update schema in packages/types → implement in api →
-bump `packages/types` version → merge (release is automatic) → update the URL in the client repo.
+API contract change: schema in packages/types → api → bump types version → merge (auto release)
+→ update the URL in the client repo.
 
 ## 3. Repo layout (this repo)
 
@@ -43,23 +38,26 @@ apps/api/src/  Express 5 + Mongoose. env.ts (Zod, fail fast) · app.ts createApp
   context.ts (AppContext for route factories) · middleware/ (asyncHandler, errorHandler, auth)
   lib/ (httpError, tokens, totp, cookies, dto mappers, studentPaper serializer)
   services/ (otp, sessions, google, rateLimit, audit, questions (versioning, approve),
-    questionImport (exceljs), testBuilder (checks + rule fill), ingestQueue, scoreQueue)
-  routes/ (auth, adminAuth, me, catalogue (+ /api/tests/:id), attempts (+ analysis, solutions,
-    practice), studentContent (bookmarks, reports), storage, admin/* (+ reports))
+    questionImport (exceljs), testBuilder, ingestQueue, scoreQueue, invoiceQueue,
+    paymentGateway (Razorpay REST + fake), payments (webhook, fulfil, refund), invoices)
+  routes/ (auth, adminAuth, me (+ access, purchases, referral), catalogue, attempts (+ analysis,
+    solutions, practice), studentContent, payments (plans, orders, verify, webhook), storage,
+    admin/* (+ reports, payments: plans, coupons, orders, entitlements, revenue))
   scripts/ (seed, loadtestSeed) · loadtest/ (k6 save-answers.js, README) at repo root
 apps/api/test/ supertest vs createApp; helpers.ts (db, logins), factories.ts (seed, makeQuestion)
 apps/worker/   BullMQ; processor per queue in src/jobs/, wired in src/runtime.ts. src/ingest/: PDF →
   test (pdf, textParser, keyParser, aiExtractor (Gemini, AiClient interface), sections, pipeline)
   test/fixtures: sample SBI/SSC/JEE PDFs + keys + scan (`pnpm --filter @mockprep/worker fixtures`)
-packages/core  @mockprep/core (api + worker): models (…, upload, attempt, bookmark, report,
-  questionStats), storage, flags, scoring, attemptStore, ranks, analysis, questionStats
+packages/core  @mockprep/core (api + worker): models (…, attempt, report, plan, coupon, order,
+  entitlement, invoice, counter, processedEvent), storage, email, scoring, attemptStore, ranks,
+  analysis, questionStats, payments (pricing, GST, access, fulfil/refund txns), invoicePdf
 packages/types @mockprep/types: shared Zod schemas + types (released, see §2)
 packages/config shared tsconfig / eslint / prettier
 docker-compose.yml (Mongo 7 + Redis) · render.yaml (FREE: one web service, worker embedded)
 render.paid.yaml (paid: api + separate worker; rename to render.yaml for the commercial launch)
 ```
 
-Infra (free): Render web, Atlas M0, Redis Cloud, R2, Brevo + Google. Paid later: see README.
+Infra (free): Render web, Atlas M0, Redis Cloud, R2, Brevo + Google, Razorpay. Paid: README.
 Free switches: `RUN_WORKER_IN_API` (api starts `@mockprep/worker/runtime` in-process),
 `SEED_ON_START` (seed at boot, no pre-deploy step). New queues go in apps/worker/src/runtime.ts.
 External providers (OTP, storage, AI, payments, email, WhatsApp, push) always sit behind an
@@ -79,14 +77,14 @@ pnpm test             # vitest (api uses mongodb-memory-server)
 pnpm build            # tsc → dist/ for every package
 pnpm format           # prettier --write .
 pnpm --filter @mockprep/api <script>   # run a script in one package
-TEST_MONGODB_URI=mongodb://localhost:27017/mockprep-test pnpm test   # use docker Mongo instead
+TEST_MONGODB_URI="mongodb://localhost:27017/mockprep-test?replicaSet=rs0" pnpm test  # docker Mongo
 pnpm --filter @mockprep/api seed       # idempotent: templates, exams, SEED_ADMIN_EMAIL superadmin
 ```
 
 Api tests need Redis at `TEST_REDIS_URL` (default redis://localhost:6379/15, wiped per test).
+Mongo must be a replica set (transactions): docker compose runs `rs0`, tests use MongoMemoryReplSet.
 
-Env: copy `apps/*/.env.example` → `.env` (loaded by `tsx --env-file-if-exists`). Adding an env var =
-add to that app's `env.ts` schema + `.env.example` + `render.yaml` + README table.
+Env: `apps/*/.env.example` → `.env`. New env var = `env.ts` + `.env.example` + render yamls + README.
 
 ## 5. Conventions
 
@@ -100,8 +98,7 @@ add to that app's `env.ts` schema + `.env.example` + `render.yaml` + README tabl
 
 - Errors are always `{ error: string, details?: unknown }` with the correct HTTP status
   (400 validation, 401 unauthenticated, 403 forbidden, 404, 409 conflict, 429, 500).
-- Every async route handler is wrapped in `asyncHandler` so errors reach the single error middleware.
-  No try/catch that swallows errors or sends ad-hoc error shapes.
+- Async handlers are wrapped in `asyncHandler` (one error middleware; no ad-hoc error shapes).
 - Admin writes are recorded in `auditLogs` (actor, entity, entityId, action, diff, at).
 - Long work (> ~1 s) goes to a BullMQ job in apps/worker, not the request.
 - Routes live under `/api` (health also at `/health`). Admin routes under `/api/admin`, guarded by
@@ -111,13 +108,12 @@ add to that app's `env.ts` schema + `.env.example` + `render.yaml` + README tabl
 - Auth: 15-min JWT (Bearer) + rotating refresh cookie per device (`mp_rt` /api/auth,
   `mp_art` /api/admin/auth), hashed in `sessions`; reuse after 20 s grace revokes the session.
   Browsers reach the api via the client apps' Next rewrites (TRUST_PROXY=2 on Render).
-- Zod gotcha: `.partial()` keeps `.default()`s, so update schemas are built from default-free
-  fields (see exam.ts). Questions/templates are saved whole (PUT), never partially.
+- Zod: `.partial()` keeps `.default()`s → update schemas use default-free fields; questions and
+  templates are saved whole (PUT).
 
 **Data**
 
-- Money is integer paise (`pricePaise`, `amountPaise`). Never floats, never rupees in storage.
-- Times stored in UTC (`Date`); display conversion to Asia/Kolkata happens in the client.
+- Money is integer paise (never floats or rupees in storage). Times are UTC (client shows IST).
 - Question content is Markdown with LaTeX in `$...$` / `$$...$$`. Store it raw; the client renders
   it only through `@mockprep/ui` QuestionRenderer (sanitised). Never store pre-rendered HTML.
 - Questions are versioned: `rootId` (= v1 id), `version`, `isLatest`. Editing content fields of a
@@ -135,6 +131,11 @@ add to that app's `env.ts` schema + `.env.example` + `render.yaml` + README tabl
 - Ranks: Redis ZSET `rank:{testId}` of first attempts only (re-attempts, practice unranked);
   rebuilt from Mongo when missing. Answer-key fixes edit questions in place (no new version) +
   `rescore` job. 3 open reports → flag `reported`, left out of new papers (attempt.excluded).
+- Payments: server prices every order (strict input, no client amount). Order transitions are
+  conditional and run in a transaction with their effects (entitlement, coupon use, FY invoice
+  number, referral); webhook event ids in `processedEvents` → replays are no-ops. Webhook is the
+  source of truth; verify only unlocks faster. Access = free test or active entitlement for the
+  exam (`canAttempt`); paywall 403 `details.reason: "locked"`. `PAYMENTS_PROVIDER=fake` in dev.
 
 **Exam templates**
 
@@ -144,15 +145,12 @@ add to that app's `env.ts` schema + `.env.example` + `render.yaml` + README tabl
 
 **Security**
 
-- Correct answers and solutions are never sent to a student before that attempt is submitted.
-  Student payloads are built ONLY by `lib/studentPaper.ts` (allow-list copy; `studentQuestionSchema`
-  is `.strict()`); tests assert no answer keys appear.
+- No answers/solutions to a student before submit: student payloads are built ONLY by
+  `lib/studentPaper.ts` (allow-list, `studentQuestionSchema` `.strict()`); tests assert it.
 - Secrets only via env (validated in env.ts); `.env.example` lists every variable with no values.
 
-**Client-facing constraints the API must respect**
-
-- Student test screen must work on a 360px Android on slow 3G: keep paper payloads small,
-  cacheable, and answer saves batched.
+**Client constraint:** the test screen must work on a 360px Android on slow 3G: keep paper
+payloads small, cacheable, and answer saves batched.
 
 ## 6. Definition of done (every task)
 
@@ -185,15 +183,17 @@ Build order; each phase ends deployable and clickable. Start each in a fresh ses
 | 4   | PDF → test pipeline                       | done   |
 | 5   | Test engine                               | done   |
 | 6   | Results + analysis                        | done   |
-| 7   | Payments                                  |        |
+| 7   | Payments                                  | done   |
 | 8   | Live tests + notifications                |        |
 | 9   | More exams + hardening + launch           |        |
 
-**Current phase: 6 (complete) — next: Phase 7.**
+**Current phase: 7 (complete) — next: Phase 8.**
 
 ## 9. Change log
 
 - 0–3 + free tier: monorepos, CI, auth, catalogue, audit, question bank, builder, embedded worker.
-- 4: core pkg; `ingest` (Gemini / unpdf, key parser, flags); uploads api. types 0.5.0.
-- 5: attempts, Redis store, flush/auto-submit, `score` queue; k6 p95 93 ms. types 0.6.1.
-- 6: ranks, analysis, solutions, bookmarks, practice, reports, stats, re-score. types 0.7.0.
+  4: core pkg; `ingest` (Gemini / unpdf, key parser, flags); uploads api. types 0.5.0. 5: attempts,
+  Redis store, flush/auto-submit, `score` queue; k6 p95 93 ms. 6: ranks, analysis, solutions,
+  bookmarks, practice, reports, stats, re-score. types 0.7.0.
+- 7: plans, coupons, orders, Razorpay (REST) + fake, webhook, entitlements, GST invoices +
+  credit notes (pdf-lib, `invoice` queue), refunds, referrals, admin revenue. types 0.8.0.

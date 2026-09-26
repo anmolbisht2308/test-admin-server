@@ -1,6 +1,6 @@
 {
   "name": "@mockprep/types",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Shared TypeScript types and Zod schemas for mockprep (api, worker, web, admin).",
   "type": "module",
   "license": "UNLICENSED",

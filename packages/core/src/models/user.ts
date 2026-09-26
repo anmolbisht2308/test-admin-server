@@ -22,6 +22,11 @@ export interface UserAttrs {
   onboardedAt?: Date;
   disabledAt?: Date;
   lastLoginAt?: Date;
+  /** This student's referral code (created on first use). */
+  referralCode?: string;
+  /** Who referred them, and when the referrer got their reward. */
+  referredBy?: Types.ObjectId;
+  referralRewardedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -53,11 +58,15 @@ const userSchema = new Schema<UserAttrs>(
     onboardedAt: Date,
     disabledAt: Date,
     lastLoginAt: Date,
+    referralCode: String,
+    referredBy: { type: Schema.Types.ObjectId, ref: "User" },
+    referralRewardedAt: Date,
   },
   { timestamps: true },
 );
 
 userSchema.index({ phone: 1 }, uniqueWhenSet("phone"));
+userSchema.index({ referralCode: 1 }, uniqueWhenSet("referralCode"));
 userSchema.index({ email: 1 }, uniqueWhenSet("email"));
 userSchema.index({ googleSub: 1 }, uniqueWhenSet("googleSub"));
 userSchema.index({ role: 1, createdAt: -1 });

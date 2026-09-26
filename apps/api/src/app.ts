@@ -33,6 +33,10 @@ import {
   type EnqueueScore,
 } from "./services/scoreQueue.js";
 import { studentContentRouter } from "./routes/studentContent.js";
+import { checkoutRouter, plansRouter, webhookRouter } from "./routes/payments.js";
+import { createInvoiceEnqueuer, type EnqueueInvoice } from "./services/invoiceQueue.js";
+import { createPaymentGateway, type PaymentGateway } from "./services/paymentGateway.js";
+import { createPaymentsService } from "./services/payments.js";
 
 export interface AppDeps {
   env: Env;
@@ -53,6 +57,10 @@ export interface AppDeps {
   enqueueScore?: EnqueueScore;
   /** Queues re-scoring a whole test. Defaults to the BullMQ "rescore" queue on `redis`. */
   enqueueRescore?: EnqueueRescore;
+  /** Defaults from PAYMENTS_PROVIDER (null = checkout off). */
+  paymentGateway?: PaymentGateway | null;
+  /** Queues invoice emails. Defaults to the BullMQ "invoice" queue on `redis`. */
+  enqueueInvoice?: EnqueueInvoice;
   /** Extra routers mounted under /api after the feature routers. */
   routers?: Router[];
 }
@@ -84,6 +92,12 @@ export function createApp(deps: AppDeps): Express {
   };
 
   const storage = deps.storage ?? createStorage(env);
+  const payments = createPaymentsService({
+    gateway: deps.paymentGateway === undefined ? createPaymentGateway(env) : deps.paymentGateway,
+    config: { invoicePrefix: env.INVOICE_PREFIX },
+    enqueueInvoice: deps.enqueueInvoice ?? createInvoiceEnqueuer(redis),
+    logger,
+  });
 
   const app = express();
   app.disable("x-powered-by");
@@ -118,6 +132,8 @@ export function createApp(deps: AppDeps): Express {
   );
   // Local file storage (dev): raw-body upload route + static files. Before the JSON parser.
   if (storage instanceof LocalStorage) app.use("/api", localStorageRouter(storage));
+  // The Razorpay webhook needs the raw body for its signature: before the JSON parser.
+  app.use("/api", webhookRouter(payments));
   app.use(express.json({ limit: "1mb" }));
   app.use(cookieParser());
 
@@ -127,10 +143,18 @@ export function createApp(deps: AppDeps): Express {
   app.use("/api/exams", catalogueRouter());
   app.use("/api/tests", publicTestsRouter());
   app.use("/api", studentContentRouter(ctx));
+  app.use("/api/plans", plansRouter());
+  app.use("/api", checkoutRouter(ctx, payments));
   const enqueueIngest = deps.enqueueIngest ?? createIngestEnqueuer(redis);
   app.use(
     "/api/admin",
-    adminRouter(ctx, storage, enqueueIngest, deps.enqueueRescore ?? createRescoreEnqueuer(redis)),
+    adminRouter(
+      ctx,
+      storage,
+      enqueueIngest,
+      deps.enqueueRescore ?? createRescoreEnqueuer(redis),
+      payments,
+    ),
   );
   for (const router of routers) app.use("/api", router);
 

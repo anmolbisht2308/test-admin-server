@@ -1,4 +1,8 @@
 import type {
+  AdminOrder,
+  Coupon,
+  Invoice,
+  Plan,
   Exam,
   ExamTemplate,
   Question,
@@ -17,6 +21,7 @@ import type { TaxonomyAttrs } from "@mockprep/core";
 import type { TestAttrs } from "@mockprep/core";
 import type { UploadAttrs, UploadFile } from "@mockprep/core";
 import type { UserAttrs } from "@mockprep/core";
+import type { CouponAttrs, InvoiceAttrs, OrderAttrs, PlanAttrs } from "@mockprep/core";
 
 type WithId<T> = T & { _id: Types.ObjectId };
 
@@ -181,4 +186,76 @@ export const toUploadDto = (u: WithId<UploadAttrs>): Upload => ({
   finishedAt: u.finishedAt ? u.finishedAt.toISOString() : null,
   createdAt: u.createdAt.toISOString(),
   updatedAt: u.updatedAt.toISOString(),
+});
+
+export const toPlanDto = (p: WithId<PlanAttrs>): Plan => ({
+  id: p._id.toString(),
+  name: p.name,
+  description: p.description,
+  kind: p.kind,
+  examKeys: [...p.examKeys],
+  pricePaise: p.pricePaise,
+  mrpPaise: p.mrpPaise ?? null,
+  validityDays: p.validityDays,
+  active: p.active,
+  sortOrder: p.sortOrder,
+  createdAt: p.createdAt.toISOString(),
+  updatedAt: p.updatedAt.toISOString(),
+});
+
+export const toCouponDto = (c: WithId<CouponAttrs>): Coupon => ({
+  id: c._id.toString(),
+  code: c.code,
+  kind: c.kind,
+  percent: c.percent ?? null,
+  flatPaise: c.flatPaise ?? null,
+  maxUses: c.maxUses ?? null,
+  perUserLimit: c.perUserLimit,
+  expiresAt: c.expiresAt?.toISOString() ?? null,
+  planIds: c.planIds.map((id) => id.toString()),
+  active: c.active,
+  uses: c.uses,
+  ownerUserId: c.ownerUserId?.toString() ?? null,
+  createdAt: c.createdAt.toISOString(),
+});
+
+export const toInvoiceDto = (i: InvoiceAttrs): Invoice => ({
+  number: i.number,
+  kind: i.kind,
+  date: i.date.toISOString(),
+  amountPaise: i.amountPaise,
+  taxablePaise: i.taxablePaise,
+  cgstPaise: i.cgstPaise,
+  sgstPaise: i.sgstPaise,
+  igstPaise: i.igstPaise,
+});
+
+type UserBrief = Pick<UserAttrs, "name" | "email" | "phone"> & { _id: Types.ObjectId };
+export const toUserBrief = (u: UserBrief | null | undefined, id: Types.ObjectId) => ({
+  id: (u?._id ?? id).toString(),
+  name: u?.name ?? null,
+  email: u?.email ?? null,
+  phone: u?.phone ?? null,
+});
+
+export const toAdminOrderDto = (
+  o: WithId<OrderAttrs>,
+  user: UserBrief | null | undefined,
+  invoiceNumber: string | null,
+): AdminOrder => ({
+  id: o._id.toString(),
+  user: toUserBrief(user, o.userId),
+  plan: { id: o.planId.toString(), name: o.plan.name },
+  pricePaise: o.pricePaise,
+  discountPaise: o.discountPaise,
+  amountPaise: o.amountPaise,
+  couponCode: o.couponCode ?? null,
+  status: o.status,
+  razorpayOrderId: o.razorpayOrderId ?? null,
+  razorpayPaymentId: o.razorpayPaymentId ?? null,
+  refundReason: o.refundReason ?? null,
+  invoiceNumber,
+  createdAt: o.createdAt.toISOString(),
+  paidAt: o.paidAt?.toISOString() ?? null,
+  refundedAt: o.refundedAt?.toISOString() ?? null,
 });

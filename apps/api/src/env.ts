@@ -86,6 +86,26 @@ export const envSchema = z
     /** Pages per AI request; chunks overlap by one page. */
     CHUNK_PAGES: z.coerce.number().int().min(2).max(30).default(6),
 
+    // ----- payments (Razorpay) -----
+    /** none = checkout off; fake = local stand-in (never in production); razorpay = real. */
+    PAYMENTS_PROVIDER: z.enum(["none", "fake", "razorpay"]).optional(),
+    /** Public key id (test keys start rzp_test_). */
+    RAZORPAY_KEY_ID: z.string().optional(),
+    RAZORPAY_KEY_SECRET: z.string().optional(),
+    /** Secret set on the webhook in the Razorpay dashboard. */
+    RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+    /** Invoice numbers: <prefix>/<FY>/000001, credit notes <prefix>/CN/<FY>/000001. */
+    INVOICE_PREFIX: z
+      .string()
+      .regex(/^[A-Z0-9]{1,8}$/)
+      .default("MP"),
+    SELLER_NAME: z.string().default("mockprep"),
+    SELLER_ADDRESS: z.string().default(""),
+    /** Empty until GST registration (invoices then say "Not registered"). */
+    SELLER_GSTIN: z.string().default(""),
+    SELLER_STATE: z.string().default(""),
+    SELLER_EMAIL: z.string().default(""),
+
     // ----- free-hosting switches (single Render free web service) -----
     /** Run the BullMQ workers inside this process instead of a separate worker service. */
     RUN_WORKER_IN_API: bool.default(false),
@@ -112,6 +132,27 @@ export const envSchema = z
           ctx.addIssue({ code: "custom", path: [key], message: "required when STORAGE_DRIVER=s3" });
       }
     }
+    if (env.PAYMENTS_PROVIDER === "razorpay") {
+      for (const key of [
+        "RAZORPAY_KEY_ID",
+        "RAZORPAY_KEY_SECRET",
+        "RAZORPAY_WEBHOOK_SECRET",
+      ] as const) {
+        if (!env[key])
+          ctx.addIssue({
+            code: "custom",
+            path: [key],
+            message: "required when PAYMENTS_PROVIDER=razorpay",
+          });
+      }
+    }
+    if (env.PAYMENTS_PROVIDER === "fake" && env.NODE_ENV === "production") {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PAYMENTS_PROVIDER"],
+        message: "fake payments are not allowed in production",
+      });
+    }
     if (env.OTP_PROVIDER === "msg91") {
       for (const key of ["MSG91_AUTH_KEY", "MSG91_TEMPLATE_ID"] as const) {
         if (!env[key])
@@ -124,8 +165,9 @@ export const envSchema = z
     }
   });
 
-export type Env = Omit<z.infer<typeof envSchema>, "COOKIE_SECURE"> & {
+export type Env = Omit<z.infer<typeof envSchema>, "COOKIE_SECURE" | "PAYMENTS_PROVIDER"> & {
   COOKIE_SECURE: boolean;
+  PAYMENTS_PROVIDER: "none" | "fake" | "razorpay";
   version: string;
 };
 
@@ -150,7 +192,12 @@ export function parseEnv(source: NodeJS.ProcessEnv): Env {
   }
   const data = result.data;
   const version = data.APP_VERSION ?? data.RENDER_GIT_COMMIT?.slice(0, 7) ?? packageVersion();
-  return { ...data, COOKIE_SECURE: data.COOKIE_SECURE ?? data.NODE_ENV === "production", version };
+  return {
+    ...data,
+    COOKIE_SECURE: data.COOKIE_SECURE ?? data.NODE_ENV === "production",
+    PAYMENTS_PROVIDER: data.PAYMENTS_PROVIDER ?? (data.NODE_ENV === "production" ? "none" : "fake"),
+    version,
+  };
 }
 
 /** Load env for the running process; exits with a clear message when invalid. */

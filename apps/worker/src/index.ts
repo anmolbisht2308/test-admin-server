@@ -1,4 +1,4 @@
-import { connectMongo, createStorage } from "@mockprep/core";
+import { connectMongo, createEmailSender, createStorage } from "@mockprep/core";
 import { loadEnv } from "./env.js";
 import { createLogger } from "./logger.js";
 import { createGeminiClient, startWorkers, type IngestOptions } from "./runtime.js";
@@ -25,7 +25,22 @@ const runtime = await startWorkers({
   logger,
   concurrency: env.WORKER_CONCURRENCY,
   source: "worker-startup",
-  ...(ingest ? { ingest, attempts: {} } : {}),
+  ...(ingest
+    ? {
+        ingest,
+        attempts: {},
+        invoices: {
+          email: createEmailSender(env, logger),
+          seller: {
+            name: env.SELLER_NAME,
+            address: env.SELLER_ADDRESS,
+            gstin: env.SELLER_GSTIN,
+            state: env.SELLER_STATE,
+            email: env.SELLER_EMAIL,
+          },
+        },
+      }
+    : {}),
 });
 
 let shuttingDown = false;
