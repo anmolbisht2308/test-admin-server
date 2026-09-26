@@ -44,7 +44,7 @@ async function publishedTest() {
   const template = await ExamTemplateModel.findOne({ key: "sbi-po-prelims" }).lean();
   if (!template) throw new Error("seed missing");
   const make = async (section: string, topic: string) =>
-    (await makeQuestion({ section, topic })).id as string;
+    (await makeQuestion({ section, topic })).id;
   const quant = [];
   for (const topic of ["Algebra", "Algebra", "Algebra", "Geometry", "Geometry", "Geometry"]) {
     quant.push(await make("Quantitative Aptitude", topic));
@@ -71,7 +71,7 @@ async function publishedTest() {
       { name: "Reasoning Ability", questionIds: reasoning },
     ],
   });
-  return { testId: test.id as string, quant, reasoning, all: [...quant, ...reasoning] };
+  return { testId: test.id, quant, reasoning, all: [...quant, ...reasoning] };
 }
 
 const answer = (questionId: string, option: number): AnswerEntry => ({

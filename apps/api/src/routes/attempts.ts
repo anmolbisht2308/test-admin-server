@@ -514,10 +514,10 @@ export function attemptsRouter(ctx: AppContext, enqueueScore: EnqueueScore): Rou
         startedAt: new Date(),
         deadline: new Date(Date.now() + practice.templateSnapshot.totalTimeSec * 1000),
       });
-      await writeMeta(redis, created.id as string, metaFor(created, practice));
+      await writeMeta(redis, created.id, metaFor(created, practice));
       const body: PracticeResponse = {
-        testId: practice.id as string,
-        attemptId: created.id as string,
+        testId: practice.id,
+        attemptId: created.id,
         questionCount: wanted.size,
       };
       res.status(201).json(body);

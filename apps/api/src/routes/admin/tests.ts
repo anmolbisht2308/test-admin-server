@@ -445,7 +445,7 @@ export function adminTestsRouter(ctx: AppContext, enqueueRescore: EnqueueRescore
         testId: test._id,
         status: { $in: ["submitted", "scored"] },
       });
-      if (attempts > 0) await enqueueRescore(test.id as string);
+      if (attempts > 0) await enqueueRescore(test.id);
       const body: RescoreResponse = { queued: attempts > 0, attempts };
       res.json(body);
     }),
@@ -460,7 +460,7 @@ export function adminTestsRouter(ctx: AppContext, enqueueRescore: EnqueueRescore
         testId: test._id,
         status: { $in: ["submitted", "scored"] },
       });
-      if (attempts > 0) await enqueueRescore(test.id as string);
+      if (attempts > 0) await enqueueRescore(test.id);
       await recordAudit({
         actorId: getAuth(req).userId,
         entity: "test",
