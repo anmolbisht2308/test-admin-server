@@ -307,6 +307,29 @@ are regenerated with `pnpm --filter @mockprep/worker fixtures`.
 - **Load test:** `loadtest/` has a k6 script. 1,000 students saving every 5 s gave p95 93 ms
   with 0 errors locally (target < 300 ms). See `loadtest/README.md`.
 
+## Results and analysis
+
+| Endpoint                                                       | What it does                                                                  |
+| -------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| `GET /api/attempts/:id/result`                                 | Score + rank, total and percentile (first attempts only)                      |
+| `GET /api/attempts/:id/analysis`                               | Sections, topics (strong/weak), topper and average, time per question, advice |
+| `GET /api/attempts/:id/solutions`                              | Every question with the key, explanation, your answer, % who got it right     |
+| `POST /api/attempts/:id/practice`                              | Private practice test of your wrong (and skipped) questions                   |
+| `GET/POST /api/bookmarks`, `DELETE /api/bookmarks/:questionId` | My revision list                                                              |
+| `POST /api/questions/:id/report`                               | Report an error                                                               |
+| `GET /api/admin/reports`, `POST …/:questionId/resolve`         | Reports queue (fix / dismiss)                                                 |
+| `PUT /api/admin/tests/:id/cutoffs`                             | Expected cut-offs shown on results                                            |
+| `PUT /api/admin/tests/:id/answer-key`, `POST …/rescore`        | Fix keys in place, then re-score every attempt and rebuild ranks              |
+| `GET /api/admin/questions/:id/stats`                           | Nightly stats: attempts, accuracy, time, option split, discrimination         |
+
+- **Rank** uses a Redis sorted set per test. Only a student's first attempt is ranked:
+  re-attempts and practice tests are not. Percentile is the % of first attempts that scored
+  below. If Redis loses the set, it is rebuilt from MongoDB.
+- **Error reports:** three open reports on a question pull it out of new papers. It isn't scored
+  there. It comes back when an admin fixes or dismisses the reports.
+- **Nightly stats** run at 02:30 IST. A question gets the flag "suspect_key" when accuracy is
+  under 5 % or a wrong option is chosen more often than the key (with 20+ attempts).
+
 ## CI
 
 `.github/workflows/ci.yml` runs on every PR and every push: install, typecheck, lint, test,

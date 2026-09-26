@@ -166,12 +166,18 @@ describe("analysis and solutions", () => {
     const app = appWithScoring();
     const { testId, quant, reasoning, all } = await publishedTest();
     const topper = await bearer(student(1));
-    await take(
+    const topperAttempt = await take(
       app,
       topper,
       testId,
       all.map((q) => answer(q, 4)),
     );
+    // The topper looks first (benchmarks get cached); a later attempt must still update them.
+    const early = await request(app)
+      .get(`/api/attempts/${topperAttempt}/analysis`)
+      .set(topper)
+      .expect(200);
+    expect(early.body.average).toMatchObject({ score: 9 });
     const me = await bearer(student(2));
     // Algebra right, Geometry deliberately wrong, Puzzles right.
     const mine = await take(app, me, testId, [

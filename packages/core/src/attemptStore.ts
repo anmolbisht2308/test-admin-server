@@ -319,7 +319,10 @@ export async function scoreSubmittedAttempt(id: string, redis?: Redis): Promise<
   if (!test) throw new Error(`test ${attempt.testId.toString()} not found`);
   const score = await scoreOne(attempt, test);
   if (redis && attempt.firstAttempt && !attempt.practice) {
-    await addToRanks(redis, attempt.testId.toString(), id, score);
+    const testId = attempt.testId.toString();
+    await addToRanks(redis, testId, id, score);
+    // Topper / average / "% got it right" include this attempt from now on.
+    await redis.del(`bench:${testId}`, `correct:${testId}`);
   }
   return true;
 }
