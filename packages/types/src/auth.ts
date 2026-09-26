@@ -45,6 +45,22 @@ export const otpVerifyInputSchema = z.object({
 });
 export type OtpVerifyInput = z.input<typeof otpVerifyInputSchema>;
 
+/** Email sign-in (free alternative to SMS): same code rules as phone OTP. */
+export const studentEmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .pipe(z.email("enter a valid email address").max(254));
+
+export const emailOtpSendInputSchema = z.object({ email: studentEmailSchema });
+export type EmailOtpSendInput = z.input<typeof emailOtpSendInputSchema>;
+
+export const emailOtpVerifyInputSchema = z.object({
+  email: studentEmailSchema,
+  code: otpCodeSchema,
+});
+export type EmailOtpVerifyInput = z.input<typeof emailOtpVerifyInputSchema>;
+
 export const googleSignInInputSchema = z.object({ idToken: z.string().min(20) });
 export type GoogleSignInInput = z.infer<typeof googleSignInInputSchema>;
 

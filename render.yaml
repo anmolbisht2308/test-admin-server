@@ -44,11 +44,20 @@ services:
         generateValue: true
       - key: TOTP_ENCRYPTION_KEY
         generateValue: true
-      # No SMS while free: students sign in with Google. (console = codes only in this log.)
+      # No SMS while free: students sign in with an email code or Google. (console = codes only in this log.)
       - key: OTP_PROVIDER
         value: console
       - key: GOOGLE_CLIENT_IDS
         sync: false
+      # Email sign-in codes via Brevo's free plan (~300 emails/day).
+      - key: EMAIL_PROVIDER
+        value: brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_FROM_NAME
+        value: mockprep
       # Figures on Cloudflare R2 (free tier, S3-compatible): STORAGE_DRIVER=s3, S3_REGION=auto,
       # S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com, S3_PUBLIC_BASE_URL=https://pub-….r2.dev
       - key: STORAGE_DRIVER

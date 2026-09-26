@@ -14,6 +14,7 @@ import { createTokenService } from "../src/lib/tokens.js";
 import { generateTotpSecret, totpCode } from "../src/lib/totp.js";
 import { UserModel } from "../src/models/user.js";
 import type { GoogleVerifier } from "../src/services/google.js";
+import type { EmailMessage, EmailSender } from "../src/services/email.js";
 import type { OtpSender } from "../src/services/otpSender.js";
 
 export const silentLogger = pino({ level: "silent" });
@@ -38,6 +39,19 @@ export class RecordingOtpSender implements OtpSender {
   readonly sent = new Map<string, string>();
   send(phone: string, code: string) {
     this.sent.set(phone, code);
+    return Promise.resolve();
+  }
+}
+
+/** Captures emails instead of sending them; `codes` maps address → last sign-in code. */
+export class RecordingEmailSender implements EmailSender {
+  readonly name = "recording";
+  readonly sent: EmailMessage[] = [];
+  readonly codes = new Map<string, string>();
+  send(message: EmailMessage) {
+    this.sent.push(message);
+    const code = /\b(\d{6})\b/.exec(message.text)?.[1];
+    if (code) this.codes.set(message.to, code);
     return Promise.resolve();
   }
 }
@@ -82,6 +96,7 @@ export function buildTestApp(overrides: Partial<AppDeps> = {}) {
     redis,
     health: { db: () => true, redis: () => true, version: "test" },
     otpSender: new RecordingOtpSender(),
+    emailSender: new RecordingEmailSender(),
     googleVerifier: fakeGoogle,
     ...overrides,
   });

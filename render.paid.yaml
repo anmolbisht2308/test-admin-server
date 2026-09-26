@@ -45,6 +45,15 @@ services:
         sync: false
       - key: GOOGLE_CLIENT_IDS
         sync: false
+      # Email sign-in codes via Brevo's free plan (~300 emails/day).
+      - key: EMAIL_PROVIDER
+        value: brevo
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: EMAIL_FROM_NAME
+        value: mockprep
       # Figures: use s3 in production (Render's disk is wiped on every deploy).
       - key: STORAGE_DRIVER
         sync: false

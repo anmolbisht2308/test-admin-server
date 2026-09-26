@@ -31,3 +31,13 @@ describe("onboardingInputSchema", () => {
     ).toBe("Priya");
   });
 });
+
+describe("emailOtpSendInputSchema", () => {
+  it("normalises and validates the email", async () => {
+    const { emailOtpSendInputSchema } = await import("../src/index.js");
+    expect(emailOtpSendInputSchema.parse({ email: "  Priya@Example.COM " }).email).toBe(
+      "priya@example.com",
+    );
+    expect(emailOtpSendInputSchema.safeParse({ email: "not-an-email" }).success).toBe(false);
+  });
+});

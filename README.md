@@ -71,14 +71,14 @@ While the project is being tested, everything runs on free plans. `render.yaml` 
 setup. The paid setup for the commercial launch is `render.paid.yaml`, described in
 [Moving to paid plans](#moving-to-paid-plans).
 
-| Piece               | Free service                                | Limits to know                                                                                     |
-| ------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| api + queue workers | Render **free** web service (one service)   | Sleeps after ~15 min idle; the first request then takes ~30–60 s. Queued jobs wait while it sleeps |
-| Database            | MongoDB Atlas **M0**                        | 512 MB, no automatic backups                                                                       |
-| Redis               | **Redis Cloud** free database               | 30 MB. Limited by storage, not by number of commands, which suits BullMQ                           |
-| Question figures    | **Cloudflare R2** free tier (S3-compatible) | Cloudflare may ask for a card to turn R2 on; the free tier is not charged                          |
-| Student login       | **Google sign-in** (free)                   | No phone OTP until SMS is paid for (`OTP_PROVIDER=console` only prints codes to the log)           |
-| web + admin         | Vercel **Hobby** (see the client README)    | For non-commercial use; move to Pro before earning money                                           |
+| Piece               | Free service                                                           | Limits to know                                                                                     |
+| ------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| api + queue workers | Render **free** web service (one service)                              | Sleeps after ~15 min idle; the first request then takes ~30–60 s. Queued jobs wait while it sleeps |
+| Database            | MongoDB Atlas **M0**                                                   | 512 MB, no automatic backups                                                                       |
+| Redis               | **Redis Cloud** free database                                          | 30 MB. Limited by storage, not by number of commands, which suits BullMQ                           |
+| Question figures    | **Cloudflare R2** free tier (S3-compatible)                            | Cloudflare may ask for a card to turn R2 on; the free tier is not charged                          |
+| Student login       | **Email codes via Brevo** (free, ~300 emails/day) + **Google sign-in** | No phone OTP until SMS is paid for (`OTP_PROVIDER=console` only prints codes to the log)           |
+| web + admin         | Vercel **Hobby** (see the client README)                               | For non-commercial use; move to Pro before earning money                                           |
 
 ### 1. MongoDB Atlas (M0)
 
@@ -106,7 +106,17 @@ setup. The paid setup for the commercial launch is `render.paid.yaml`, described
    you an Access Key ID and a Secret Access Key.
 5. Note your account id. The endpoint is `https://<account-id>.r2.cloudflarestorage.com`.
 
-### 4. Render (free web service)
+### 4. Brevo (email sign-in codes)
+
+1. Create a free account at brevo.com.
+2. **Senders, Domains & Dedicated IPs → Senders**: add and verify the address emails come from
+   (for example your Gmail). Its address is `EMAIL_FROM`. For better delivery later, add and
+   authenticate your own domain.
+3. **SMTP & API → API keys**: create a key. That is `BREVO_API_KEY`.
+4. The free plan sends about 300 emails a day, which is plenty while testing. A student gets one
+   email per sign-in (codes expire after 5 minutes; 5 codes per address per hour at most).
+
+### 5. Render (free web service)
 
 1. In Render, click **New → Blueprint** and select this repo. Render reads `render.yaml` and
    creates one free web service, `mockprep-api`, in Singapore. The queue workers run inside it
@@ -127,7 +137,8 @@ setup. The paid setup for the commercial launch is `render.paid.yaml`, described
 | `REDIS_URL`                                                   | Redis Cloud URL                                                                                        |
 | `CORS_ORIGINS`                                                | web + admin URLs, comma-separated (browsers use the Next proxy, so this only matters for direct calls) |
 | `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`                     | first superadmin. Password: 12+ chars with upper, lower and a digit                                    |
-| `GOOGLE_CLIENT_IDS`                                           | Google OAuth web client id (see the client README). This is how students sign in on the free setup     |
+| `GOOGLE_CLIENT_IDS`                                           | Google OAuth web client id (see the client README). Optional second sign-in method                     |
+| `BREVO_API_KEY`, `EMAIL_FROM`                                 | Brevo API key and verified sender address (`EMAIL_PROVIDER=brevo` is set by `render.yaml`)             |
 | `STORAGE_DRIVER`                                              | `s3` (R2 speaks the S3 protocol). Never `local` on Render: the disk is wiped on every deploy           |
 | `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_PUBLIC_BASE_URL` | R2: bucket name, `auto`, `https://<account-id>.r2.cloudflarestorage.com`, the public `r2.dev` URL      |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`                  | the R2 API token's keys (the S3 SDK reads these names)                                                 |
@@ -136,7 +147,8 @@ setup. The paid setup for the commercial launch is `render.paid.yaml`, described
 
 - `NODE_ENV=production`, `NODE_VERSION=22`, `LOG_LEVEL=info`, `TRUST_PROXY=2`. Requests pass
   through the Vercel rewrite and then Render's proxy.
-- `RUN_WORKER_IN_API=true`, `WORKER_CONCURRENCY=2`, `SEED_ON_START=true`, `OTP_PROVIDER=console`.
+- `RUN_WORKER_IN_API=true`, `WORKER_CONCURRENCY=2`, `SEED_ON_START=true`, `OTP_PROVIDER=console`,
+  `EMAIL_PROVIDER=brevo`, `EMAIL_FROM_NAME=mockprep`.
 - `JWT_SECRET` and `TOTP_ENCRYPTION_KEY`, generated by Render. **Never rotate
   `TOTP_ENCRYPTION_KEY`**: doing so locks out every admin's 2FA.
 
@@ -162,10 +174,10 @@ Nothing in the code changes. You swap plans and env vars:
 
 ## Auth
 
-| Who      | How                                                        | Endpoints                                      |
-| -------- | ---------------------------------------------------------- | ---------------------------------------------- |
-| Students | phone OTP (MSG91, or console in dev) or Google sign-in     | `/api/auth/otp/send`, `/otp/verify`, `/google` |
-| Admins   | email + password (argon2), then TOTP (enrolment is forced) | `/api/admin/auth/login`, `/totp/verify`        |
+| Who      | How                                                                                          | Endpoints                                                                      |
+| -------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Students | phone OTP (MSG91, or console in dev), email OTP (Brevo, or console in dev) or Google sign-in | `/api/auth/otp/send`, `/otp/verify`, `/email/send`, `/email/verify`, `/google` |
+| Admins   | email + password (argon2), then TOTP (enrolment is forced)                                   | `/api/admin/auth/login`, `/totp/verify`                                        |
 
 - **Tokens.** Each sign-in returns a 15-minute JWT access token, sent as
   `Authorization: Bearer`. It also sets an httpOnly `SameSite=Strict` refresh cookie: `mp_rt`

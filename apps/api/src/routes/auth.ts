@@ -1,4 +1,10 @@
-import { googleSignInInputSchema, otpSendInputSchema, otpVerifyInputSchema } from "@mockprep/types";
+import {
+  emailOtpSendInputSchema,
+  emailOtpVerifyInputSchema,
+  googleSignInInputSchema,
+  otpSendInputSchema,
+  otpVerifyInputSchema,
+} from "@mockprep/types";
 import { Router } from "express";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
@@ -6,7 +12,7 @@ import { asyncHandler } from "../middleware/asyncHandler.js";
 import { UserModel } from "../models/user.js";
 import { endSession, refreshSession, startSession } from "./sessionResponse.js";
 
-/** Student auth: phone OTP + Google. Mounted at /api/auth. */
+/** Student auth: phone OTP, email OTP and Google. Mounted at /api/auth. */
 export function studentAuthRouter(ctx: AppContext): Router {
   const router = Router();
 
@@ -26,6 +32,29 @@ export function studentAuthRouter(ctx: AppContext): Router {
       const user =
         (await UserModel.findOne({ phone })) ??
         (await UserModel.create({ role: "student", phone }));
+      if (user.role !== "student") throw new HttpError(403, "Use the admin panel to sign in");
+      await startSession(ctx, req, res, user, "student");
+    }),
+  );
+
+  // Email codes: the free alternative to SMS (Brevo free tier, or console in dev).
+  router.post(
+    "/email/send",
+    asyncHandler(async (req, res) => {
+      const { email } = emailOtpSendInputSchema.parse(req.body);
+      res.json(await ctx.otp.sendEmail(email, req.ip ?? "unknown"));
+    }),
+  );
+
+  router.post(
+    "/email/verify",
+    asyncHandler(async (req, res) => {
+      const { email, code } = emailOtpVerifyInputSchema.parse(req.body);
+      await ctx.otp.verifyEmail(email, code);
+      // Same account as a Google sign-in with this (verified) email.
+      const user =
+        (await UserModel.findOne({ email })) ??
+        (await UserModel.create({ role: "student", email }));
       if (user.role !== "student") throw new HttpError(403, "Use the admin panel to sign in");
       await startSession(ctx, req, res, user, "student");
     }),

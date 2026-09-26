@@ -15,6 +15,7 @@ import { studentAuthRouter } from "./routes/auth.js";
 import { catalogueRouter } from "./routes/catalogue.js";
 import { healthRouter, type HealthChecks } from "./routes/health.js";
 import { meRouter } from "./routes/me.js";
+import { createEmailSender, type EmailSender } from "./services/email.js";
 import { createGoogleVerifier, type GoogleVerifier } from "./services/google.js";
 import { createOtpService } from "./services/otp.js";
 import { createOtpSender, type OtpSender } from "./services/otpSender.js";
@@ -30,6 +31,8 @@ export interface AppDeps {
   health: HealthChecks;
   /** Defaults from env (console or MSG91). Tests inject a recorder. */
   otpSender?: OtpSender;
+  /** Defaults from env (console or Brevo). Tests inject a recorder. */
+  emailSender?: EmailSender;
   /** Defaults from GOOGLE_CLIENT_IDS (null = Google sign-in off). */
   googleVerifier?: GoogleVerifier | null;
   /** Defaults from STORAGE_DRIVER (local disk or S3). */
@@ -50,7 +53,14 @@ export function createApp(deps: AppDeps): Express {
       adminTtlDays: env.ADMIN_REFRESH_TTL_DAYS,
       studentMaxDevices: env.STUDENT_MAX_DEVICES,
     }),
-    otp: createOtpService(redis, deps.otpSender ?? createOtpSender(env, logger), env.JWT_SECRET),
+    otp: createOtpService(
+      redis,
+      {
+        sms: deps.otpSender ?? createOtpSender(env, logger),
+        email: deps.emailSender ?? createEmailSender(env, logger),
+      },
+      env.JWT_SECRET,
+    ),
     google:
       deps.googleVerifier === undefined
         ? createGoogleVerifier(env.GOOGLE_CLIENT_IDS)

@@ -60,6 +60,14 @@ export const envSchema = z
     /** OAuth client ids accepted as the Google ID token audience. Empty = Google sign-in off. */
     GOOGLE_CLIENT_IDS: optionalCommaList,
 
+    // ----- email (sign-in codes now; invoices/notifications later) -----
+    /** console = emails only in the api log (dev). brevo = real email (free tier). */
+    EMAIL_PROVIDER: z.enum(["console", "brevo"]).default("console"),
+    BREVO_API_KEY: z.string().optional(),
+    /** Verified sender address in Brevo, e.g. no-reply@yourdomain.com or your Gmail. */
+    EMAIL_FROM: z.email().optional(),
+    EMAIL_FROM_NAME: z.string().default("mockprep"),
+
     // ----- file storage (question figures) -----
     STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
     /** local driver: directory for uploaded files (served at /api/files/*). */
@@ -81,6 +89,16 @@ export const envSchema = z
     SEED_ADMIN_PASSWORD: z.string().optional(),
   })
   .superRefine((env, ctx) => {
+    if (env.EMAIL_PROVIDER === "brevo") {
+      for (const key of ["BREVO_API_KEY", "EMAIL_FROM"] as const) {
+        if (!env[key])
+          ctx.addIssue({
+            code: "custom",
+            path: [key],
+            message: "required when EMAIL_PROVIDER=brevo",
+          });
+      }
+    }
     if (env.STORAGE_DRIVER === "s3") {
       for (const key of ["S3_BUCKET", "S3_REGION", "S3_PUBLIC_BASE_URL"] as const) {
         if (!env[key])
