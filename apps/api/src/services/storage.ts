@@ -101,8 +101,17 @@ export class S3Storage implements Storage {
     private readonly bucket: string,
     region: string,
     private readonly publicBaseUrl: string,
+    /** S3-compatible endpoint (Cloudflare R2, MinIO…). Omit for AWS S3. */
+    endpoint?: string,
   ) {
-    this.client = new S3Client({ region });
+    this.client = new S3Client({
+      region,
+      ...(endpoint ? { endpoint } : {}),
+      // Browsers PUT to the presigned URL without computing checksums, so only add them when
+      // an operation requires it (the SDK default would put checksum params in the URL).
+      requestChecksumCalculation: "WHEN_REQUIRED",
+      responseChecksumValidation: "WHEN_REQUIRED",
+    });
   }
 
   async presignUpload(key: string, contentType: string, size: number) {
@@ -139,7 +148,7 @@ export class S3Storage implements Storage {
 
 export function createStorage(env: Env): Storage {
   if (env.STORAGE_DRIVER === "s3" && env.S3_BUCKET && env.S3_REGION && env.S3_PUBLIC_BASE_URL) {
-    return new S3Storage(env.S3_BUCKET, env.S3_REGION, env.S3_PUBLIC_BASE_URL);
+    return new S3Storage(env.S3_BUCKET, env.S3_REGION, env.S3_PUBLIC_BASE_URL, env.S3_ENDPOINT);
   }
   return new LocalStorage(env.LOCAL_UPLOAD_DIR, env.JWT_SECRET);
 }

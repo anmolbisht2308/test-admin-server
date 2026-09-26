@@ -32,6 +32,9 @@ importers:
       '@mockprep/types':
         specifier: workspace:*
         version: link:../../packages/types
+      '@mockprep/worker':
+        specifier: workspace:*
+        version: link:../worker
       argon2:
         specifier: ^0.45.1
         version: 0.45.1

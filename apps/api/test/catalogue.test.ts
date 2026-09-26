@@ -7,9 +7,10 @@ import {
 } from "@mockprep/types";
 import { AuditLogModel } from "../src/models/auditLog.js";
 import { SEED_EXAMS, SEED_TEMPLATES } from "../src/scripts/seed-data.js";
-import { seedCatalogue } from "../src/scripts/seedCatalogue.js";
+import { seedAdmin, seedCatalogue } from "../src/scripts/seedCatalogue.js";
+import { UserModel } from "../src/models/user.js";
 import { ExamTemplateModel } from "../src/models/examTemplate.js";
-import { accessTokenFor, buildTestApp, useTestDatabase } from "./helpers.js";
+import { accessTokenFor, buildTestApp, silentLogger, useTestDatabase } from "./helpers.js";
 
 useTestDatabase();
 
@@ -188,5 +189,17 @@ describe("seed data", () => {
     );
     expect(upsc.templates.map((t) => t.key)).toEqual(["upsc-gs1", "upsc-csat"]);
     expect(upsc.templates[1]?.qualifyingPercent).toBe(33);
+  });
+
+  it("creates the first admin once and never changes its password", async () => {
+    await seedAdmin("Owner@Example.com", "Strong-Password-123", silentLogger);
+    const first = await UserModel.findOne({ email: "owner@example.com" }).lean();
+    expect(first?.role).toBe("superadmin");
+    await seedAdmin("owner@example.com", "Another-Password-456", silentLogger);
+    const again = await UserModel.findOne({ email: "owner@example.com" }).lean();
+    expect(again?.passwordHash).toBe(first?.passwordHash);
+    await expect(seedAdmin("x@example.com", "weak", silentLogger)).rejects.toThrow(
+      /SEED_ADMIN_PASSWORD/,
+    );
   });
 });

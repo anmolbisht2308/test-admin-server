@@ -44,6 +44,25 @@ describe("parseEnv", () => {
     ]);
   });
 
+  it("parses the free-hosting switches", () => {
+    expect(parseEnv(valid)).toMatchObject({
+      RUN_WORKER_IN_API: false,
+      SEED_ON_START: false,
+      WORKER_CONCURRENCY: 2,
+    });
+    const free = parseEnv({
+      ...valid,
+      RUN_WORKER_IN_API: "true",
+      SEED_ON_START: "1",
+      S3_ENDPOINT: "https://acct.r2.cloudflarestorage.com",
+    });
+    expect(free).toMatchObject({
+      RUN_WORKER_IN_API: true,
+      SEED_ON_START: true,
+      S3_ENDPOINT: "https://acct.r2.cloudflarestorage.com",
+    });
+  });
+
   it("fails with every invalid variable listed", () => {
     expect(() => parseEnv({ CORS_ORIGINS: "not-a-url", PORT: "abc" })).toThrow(
       /MONGODB_URI[\s\S]*REDIS_URL[\s\S]*CORS_ORIGINS[\s\S]*JWT_SECRET/,

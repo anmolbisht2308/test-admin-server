@@ -1,0 +1,86 @@
+# PAID Render Blueprint (commercial launch): api (web service) + separate background worker.
+# To switch from the free setup: rename this file to render.yaml (replacing the free one), then
+# in Render re-sync the Blueprint. RUN_WORKER_IN_API / SEED_ON_START are off here: the worker
+# runs as its own service and the seed runs as the pre-deploy step.
+# Render dashboard → New → Blueprint → pick this repo. Values marked sync: false are
+# entered in the dashboard on first deploy (never commit them).
+# NODE_ENV=development on install so devDependencies (typescript) are available to build.
+services:
+  - type: web
+    name: mockprep-api
+    runtime: node
+    region: singapore
+    plan: starter
+    buildCommand: corepack enable && NODE_ENV=development pnpm install --frozen-lockfile && pnpm turbo run build --filter=@mockprep/api...
+    # Idempotent: inserts missing templates/exams and SEED_ADMIN_EMAIL once.
+    preDeployCommand: node apps/api/dist/scripts/seed.js
+    startCommand: node apps/api/dist/server.js
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: LOG_LEVEL
+        value: info
+      # Vercel rewrite (web/admin → /api/*) + Render's proxy.
+      - key: TRUST_PROXY
+        value: "2"
+      - key: MONGODB_URI
+        sync: false
+      - key: REDIS_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TOTP_ENCRYPTION_KEY
+        generateValue: true
+      - key: OTP_PROVIDER
+        value: console
+      - key: MSG91_AUTH_KEY
+        sync: false
+      - key: MSG91_TEMPLATE_ID
+        sync: false
+      - key: GOOGLE_CLIENT_IDS
+        sync: false
+      # Figures: use s3 in production (Render's disk is wiped on every deploy).
+      - key: STORAGE_DRIVER
+        sync: false
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_PUBLIC_BASE_URL
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: SEED_ADMIN_EMAIL
+        sync: false
+      - key: SEED_ADMIN_PASSWORD
+        sync: false
+
+  - type: worker
+    name: mockprep-worker
+    runtime: node
+    region: singapore
+    plan: starter
+    buildCommand: corepack enable && NODE_ENV=development pnpm install --frozen-lockfile && pnpm turbo run build --filter=@mockprep/worker...
+    startCommand: node apps/worker/dist/index.js
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: "22"
+      - key: LOG_LEVEL
+        value: info
+      - key: WORKER_CONCURRENCY
+        value: "5"
+      - key: REDIS_URL
+        sync: false

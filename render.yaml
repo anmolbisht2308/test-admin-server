@@ -1,16 +1,18 @@
-# Render Blueprint: api (web service) + worker (background worker).
-# Render dashboard → New → Blueprint → pick this repo. Values marked sync: false are
-# entered in the dashboard on first deploy (never commit them).
+# FREE Render Blueprint (default while testing): ONE free web service runs the api AND the
+# queue workers (RUN_WORKER_IN_API=true) and seeds on startup (SEED_ON_START=true), because free
+# plans have no background workers and no pre-deploy step.
+# Free web services sleep after ~15 min without traffic; the first request then takes ~30-60 s.
+# For the commercial launch use render.paid.yaml (see its header).
+# Render dashboard → New → Blueprint → pick this repo. sync: false values are entered in the
+# dashboard (never commit them).
 # NODE_ENV=development on install so devDependencies (typescript) are available to build.
 services:
   - type: web
     name: mockprep-api
     runtime: node
     region: singapore
-    plan: starter
+    plan: free
     buildCommand: corepack enable && NODE_ENV=development pnpm install --frozen-lockfile && pnpm turbo run build --filter=@mockprep/api...
-    # Idempotent: inserts missing templates/exams and SEED_ADMIN_EMAIL once.
-    preDeployCommand: node apps/api/dist/scripts/seed.js
     startCommand: node apps/api/dist/server.js
     healthCheckPath: /health
     autoDeploy: true
@@ -24,8 +26,16 @@ services:
       # Vercel rewrite (web/admin → /api/*) + Render's proxy.
       - key: TRUST_PROXY
         value: "2"
+      - key: RUN_WORKER_IN_API
+        value: "true"
+      - key: WORKER_CONCURRENCY
+        value: "2"
+      - key: SEED_ON_START
+        value: "true"
+      # MongoDB Atlas M0 (free) connection string.
       - key: MONGODB_URI
         sync: false
+      # Redis Cloud free database: redis://default:<password>@<host>:<port>
       - key: REDIS_URL
         sync: false
       - key: CORS_ORIGINS
@@ -34,23 +44,24 @@ services:
         generateValue: true
       - key: TOTP_ENCRYPTION_KEY
         generateValue: true
+      # No SMS while free: students sign in with Google. (console = codes only in this log.)
       - key: OTP_PROVIDER
         value: console
-      - key: MSG91_AUTH_KEY
-        sync: false
-      - key: MSG91_TEMPLATE_ID
-        sync: false
       - key: GOOGLE_CLIENT_IDS
         sync: false
-      # Figures: use s3 in production (Render's disk is wiped on every deploy).
+      # Figures on Cloudflare R2 (free tier, S3-compatible): STORAGE_DRIVER=s3, S3_REGION=auto,
+      # S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com, S3_PUBLIC_BASE_URL=https://pub-….r2.dev
       - key: STORAGE_DRIVER
         sync: false
       - key: S3_BUCKET
         sync: false
       - key: S3_REGION
         sync: false
+      - key: S3_ENDPOINT
+        sync: false
       - key: S3_PUBLIC_BASE_URL
         sync: false
+      # R2 API token's access key id / secret (the AWS SDK reads these names).
       - key: AWS_ACCESS_KEY_ID
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
@@ -58,24 +69,4 @@ services:
       - key: SEED_ADMIN_EMAIL
         sync: false
       - key: SEED_ADMIN_PASSWORD
-        sync: false
-
-  - type: worker
-    name: mockprep-worker
-    runtime: node
-    region: singapore
-    plan: starter
-    buildCommand: corepack enable && NODE_ENV=development pnpm install --frozen-lockfile && pnpm turbo run build --filter=@mockprep/worker...
-    startCommand: node apps/worker/dist/index.js
-    autoDeploy: true
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: NODE_VERSION
-        value: "22"
-      - key: LOG_LEVEL
-        value: info
-      - key: WORKER_CONCURRENCY
-        value: "5"
-      - key: REDIS_URL
         sync: false

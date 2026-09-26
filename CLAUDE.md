@@ -50,10 +50,14 @@ apps/api/test/ supertest vs createApp; helpers.ts (db, logins), factories.ts (se
 apps/worker/   BullMQ; one processor factory per queue in src/jobs/, wired in src/index.ts
 packages/types @mockprep/types: shared Zod schemas + types (released, see §2)
 packages/config shared tsconfig / eslint / prettier
-docker-compose.yml (Mongo 7 + Redis) · render.yaml (api + worker)
+docker-compose.yml (Mongo 7 + Redis) · render.yaml (FREE: one web service, worker embedded)
+render.paid.yaml (paid: api + separate worker; rename to render.yaml for the commercial launch)
 ```
 
-Infra: MongoDB Atlas, Redis (Upstash), files on S3 (local-disk storage adapter in dev).
+Infra now (free): Render free web, Atlas M0, Redis Cloud free, Cloudflare R2 (S3 driver +
+`S3_ENDPOINT`), Google sign-in. Paid later: Render paid + worker, Atlas M10+, S3/R2, MSG91.
+Free switches: `RUN_WORKER_IN_API` (api starts `@mockprep/worker/runtime` in-process),
+`SEED_ON_START` (seed at boot, no pre-deploy step). New queues go in apps/worker/src/runtime.ts.
 External providers (OTP, storage, AI, payments, email, WhatsApp, push) always sit behind an
 interface with a dev/console adapter.
 
@@ -186,3 +190,6 @@ Build order; each phase ends deployable and clickable. Start each in a fresh ses
   figure storage (local + S3 presign; @aws-sdk/client-s3 + s3-request-presigner), tests with
   frozen templateSnapshot, rule fill (mix, topics, taxonomy, not-used-in-N-days), live checks +
   publish gate, student-paper preview, series API (UI later), public test cards; types 0.3.0.
+- Free tier: worker runtime extracted (`@mockprep/worker/runtime`) and embeddable in the api,
+  seed-on-start, R2 via `S3_ENDPOINT` (checksums only when required), render.yaml free /
+  render.paid.yaml paid.

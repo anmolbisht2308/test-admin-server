@@ -68,6 +68,17 @@ export const envSchema = z
     S3_REGION: z.string().optional(),
     /** Public base URL for files (bucket URL or CloudFront), no trailing slash. */
     S3_PUBLIC_BASE_URL: z.url().optional(),
+    /** S3-compatible endpoint, e.g. Cloudflare R2: https://<account-id>.r2.cloudflarestorage.com */
+    S3_ENDPOINT: z.url().optional(),
+
+    // ----- free-hosting switches (single Render free web service) -----
+    /** Run the BullMQ workers inside this process instead of a separate worker service. */
+    RUN_WORKER_IN_API: bool.default(false),
+    WORKER_CONCURRENCY: z.coerce.number().int().positive().default(2),
+    /** Seed templates/exams/first admin at startup (for hosts without a pre-deploy step). */
+    SEED_ON_START: bool.default(false),
+    SEED_ADMIN_EMAIL: z.email().optional(),
+    SEED_ADMIN_PASSWORD: z.string().optional(),
   })
   .superRefine((env, ctx) => {
     if (env.STORAGE_DRIVER === "s3") {

@@ -100,5 +100,25 @@ describe("S3 driver", () => {
     );
     expect(result.uploadUrl).toMatch(/X-Amz-Signature=/);
     expect(result.fileUrl).toBe(`https://cdn.example.com/${key}`);
+    // Browsers can't send SDK checksums, so the URL must not require them.
+    expect(result.uploadUrl).not.toMatch(/x-amz-checksum|x-amz-sdk-checksum/i);
+  });
+
+  it("works with an S3-compatible endpoint (Cloudflare R2)", async () => {
+    process.env.AWS_ACCESS_KEY_ID = "r2-access-key";
+    process.env.AWS_SECRET_ACCESS_KEY = "r2-secret";
+    const r2 = new S3Storage(
+      "mockprep-figures",
+      "auto",
+      "https://pub-abc.r2.dev",
+      "https://acct123.r2.cloudflarestorage.com",
+    );
+    const key = newFigureKey("image/png");
+    const result = await r2.presignUpload(key, "image/png", 100);
+    expect(result.uploadUrl).toMatch(
+      /^https:\/\/mockprep-figures\.acct123\.r2\.cloudflarestorage\.com\/figures\//,
+    );
+    expect(result.uploadUrl).not.toMatch(/x-amz-checksum|x-amz-sdk-checksum/i);
+    expect(result.fileUrl).toBe(`https://pub-abc.r2.dev/${key}`);
   });
 });

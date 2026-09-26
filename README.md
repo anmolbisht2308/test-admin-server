@@ -4,12 +4,12 @@ The API, background worker and shared types for mockprep, a mock-test platform f
 competitive exams. The student site and the admin panel are in
 [test-admin-client](https://github.com/anmolbisht2308/test-admin-client).
 
-| Package           | What it is                                       | Deployed to              |
-| ----------------- | ------------------------------------------------ | ------------------------ |
-| `apps/api`        | Express + Mongoose REST API (`GET /health`)      | Render web service       |
-| `apps/worker`     | BullMQ workers (currently a `ping` job)          | Render background worker |
-| `packages/types`  | `@mockprep/types`: shared TS types + Zod schemas | GitHub Release tarball   |
-| `packages/config` | Shared tsconfig / eslint / prettier              | not deployed             |
+| Package           | What it is                                       | Deployed to                                                                            |
+| ----------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `apps/api`        | Express + Mongoose REST API (`GET /health`)      | Render web service                                                                     |
+| `apps/worker`     | BullMQ workers (currently a `ping` job)          | inside the api on the free plan (`RUN_WORKER_IN_API`); own background worker when paid |
+| `packages/types`  | `@mockprep/types`: shared TS types + Zod schemas | GitHub Release tarball                                                                 |
+| `packages/config` | Shared tsconfig / eslint / prettier              | not deployed                                                                           |
 
 ## Local development
 
@@ -65,58 +65,78 @@ To work across both repos locally, build the package here (`pnpm --filter @mockp
 and link it into the client: run `pnpm link ../test-admin-server/packages/types` inside the
 client app.
 
-## Deploy
+## Deploy (free setup)
 
-### 1. MongoDB Atlas
+While the project is being tested, everything runs on free plans. `render.yaml` is the free
+setup. The paid setup for the commercial launch is `render.paid.yaml`, described in
+[Moving to paid plans](#moving-to-paid-plans).
 
-1. Create a cluster. Pick an AWS Mumbai (ap-south-1) region so it is close to users. M0 is fine to
-   start with.
+| Piece               | Free service                                | Limits to know                                                                                     |
+| ------------------- | ------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| api + queue workers | Render **free** web service (one service)   | Sleeps after ~15 min idle; the first request then takes ~30–60 s. Queued jobs wait while it sleeps |
+| Database            | MongoDB Atlas **M0**                        | 512 MB, no automatic backups                                                                       |
+| Redis               | **Redis Cloud** free database               | 30 MB. Limited by storage, not by number of commands, which suits BullMQ                           |
+| Question figures    | **Cloudflare R2** free tier (S3-compatible) | Cloudflare may ask for a card to turn R2 on; the free tier is not charged                          |
+| Student login       | **Google sign-in** (free)                   | No phone OTP until SMS is paid for (`OTP_PROVIDER=console` only prints codes to the log)           |
+| web + admin         | Vercel **Hobby** (see the client README)    | For non-commercial use; move to Pro before earning money                                           |
+
+### 1. MongoDB Atlas (M0)
+
+1. Create a free **M0** cluster. Pick an AWS Mumbai (ap-south-1) region so it is close to users.
 2. **Database Access**: add a database user with a password.
-3. **Network Access**: allow `0.0.0.0/0`. Render's outbound IPs are not fixed on the starter plan.
-   You can lock this down later with Render's static outbound IPs.
+3. **Network Access**: allow `0.0.0.0/0`. Render's free services have no fixed outbound IP.
 4. Click **Connect → Drivers** and copy the SRV string. Add the database name, like this:
    `mongodb+srv://USER:PASS@cluster0.xxxxx.mongodb.net/mockprep?retryWrites=true&w=majority`
 
-### 2. Upstash Redis
+### 2. Redis Cloud (free)
 
-1. Create a Redis database in the `ap-south-1` region (or the closest one to Render Singapore).
-2. Copy the **TLS** connection URL: `rediss://default:PASSWORD@xxx.upstash.io:6379`.
-3. BullMQ keeps connections open and polls often. The free tier's request quota runs out quickly
-   with a worker running, so use the pay-as-you-go or fixed plan in production.
+1. At redis.io/cloud, create a free database in the region closest to Singapore (for example
+   AWS ap-south-1).
+2. Copy the public endpoint and the default user's password. The `REDIS_URL` is
+   `redis://default:PASSWORD@HOST:PORT`. If you turn on TLS, use `rediss://`.
 
-### 3. Render (api + worker)
+### 3. Cloudflare R2 (question figures)
+
+1. In Cloudflare, go to **R2 → Create bucket** (for example `mockprep-figures`).
+2. **Public access**: in the bucket settings, turn on the public `r2.dev` URL (or connect a
+   custom domain). That URL is `S3_PUBLIC_BASE_URL`, for example `https://pub-xxxx.r2.dev`.
+3. **CORS policy** on the bucket: allow `PUT` from your admin site's URL, with allowed header
+   `content-type`.
+4. **R2 → Manage API tokens**: create a token with Object Read & Write on this bucket. It gives
+   you an Access Key ID and a Secret Access Key.
+5. Note your account id. The endpoint is `https://<account-id>.r2.cloudflarestorage.com`.
+
+### 4. Render (free web service)
 
 1. In Render, click **New → Blueprint** and select this repo. Render reads `render.yaml` and
-   creates `mockprep-api` (web service) and `mockprep-worker` (background worker) in Singapore.
-   Background workers need a paid instance.
+   creates one free web service, `mockprep-api`, in Singapore. The queue workers run inside it
+   (`RUN_WORKER_IN_API=true`).
 2. Fill in the `sync: false` variables when asked (see the table below).
-3. Deploy. Before each api deploy, Render runs the seed (`preDeployCommand`). It only inserts
-   missing templates and exams, and creates `SEED_ADMIN_EMAIL` once. Admin-panel edits are
-   never overwritten.
-4. Check it: `curl https://mockprep-api.onrender.com/health`. Render also uses `GET /health` as
-   the health check. It returns 200 only when Mongo and Redis are both up, and 503 otherwise.
-   The worker's logs should show `worker started` and `pong`.
+3. Deploy. On every start the api seeds the database (`SEED_ON_START=true`): it inserts missing
+   templates and exams, and creates `SEED_ADMIN_EMAIL` once. Admin-panel edits are never
+   overwritten.
+4. Check it: `curl https://mockprep-api.onrender.com/health`. It returns 200 when Mongo and
+   Redis are both up, and 503 otherwise. The logs should show `startup seed done`,
+   `worker started` and `pong` (`source: api-embedded`).
 5. Sign in to the admin panel with `SEED_ADMIN_EMAIL`. The first sign-in asks you to scan a QR
    code with an authenticator app (Google Authenticator, Authy, 1Password…).
 
-| Variable                                       | api | worker | Value                                                                                                         |
-| ---------------------------------------------- | :-: | :----: | ------------------------------------------------------------------------------------------------------------- |
-| `MONGODB_URI`                                  |  ✓  |        | Atlas SRV string                                                                                              |
-| `REDIS_URL`                                    |  ✓  |   ✓    | Upstash `rediss://` URL                                                                                       |
-| `CORS_ORIGINS`                                 |  ✓  |        | web + admin URLs, comma-separated (browsers go through the Next proxy, so this only matters for direct calls) |
-| `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`      |  ✓  |        | first superadmin. Password: 12+ chars with upper, lower and a digit                                           |
-| `OTP_PROVIDER`                                 |  ✓  |        | `console` (codes only in the api log) or `msg91`                                                              |
-| `MSG91_AUTH_KEY`, `MSG91_TEMPLATE_ID`          |  ✓  |        | required when `OTP_PROVIDER=msg91`. The Flow template must contain `##otp##`                                  |
-| `GOOGLE_CLIENT_IDS`                            |  ✓  |        | OAuth web client id(s). Leave empty to turn Google sign-in off                                                |
-| `STORAGE_DRIVER`                               |  ✓  |        | `s3` in production (Render's disk is wiped on every deploy); `local` only for dev                             |
-| `S3_BUCKET`, `S3_REGION`, `S3_PUBLIC_BASE_URL` |  ✓  |        | bucket for question figures and the public URL they are served from (bucket URL or CloudFront)                |
-| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`   |  ✓  |        | IAM user limited to `s3:PutObject` on that bucket                                                             |
+| Variable                                                      | Value                                                                                                  |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `MONGODB_URI`                                                 | Atlas M0 SRV string                                                                                    |
+| `REDIS_URL`                                                   | Redis Cloud URL                                                                                        |
+| `CORS_ORIGINS`                                                | web + admin URLs, comma-separated (browsers use the Next proxy, so this only matters for direct calls) |
+| `SEED_ADMIN_EMAIL`, `SEED_ADMIN_PASSWORD`                     | first superadmin. Password: 12+ chars with upper, lower and a digit                                    |
+| `GOOGLE_CLIENT_IDS`                                           | Google OAuth web client id (see the client README). This is how students sign in on the free setup     |
+| `STORAGE_DRIVER`                                              | `s3` (R2 speaks the S3 protocol). Never `local` on Render: the disk is wiped on every deploy           |
+| `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_PUBLIC_BASE_URL` | R2: bucket name, `auto`, `https://<account-id>.r2.cloudflarestorage.com`, the public `r2.dev` URL      |
+| `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`                  | the R2 API token's keys (the S3 SDK reads these names)                                                 |
 
-`render.yaml` also sets these:
+`render.yaml` also sets:
 
-- `NODE_ENV=production`, `NODE_VERSION=22`, `LOG_LEVEL=info` on both services.
-- `WORKER_CONCURRENCY=5` on the worker.
-- `TRUST_PROXY=2` on the api. Requests pass through the Vercel rewrite and then Render's proxy.
+- `NODE_ENV=production`, `NODE_VERSION=22`, `LOG_LEVEL=info`, `TRUST_PROXY=2`. Requests pass
+  through the Vercel rewrite and then Render's proxy.
+- `RUN_WORKER_IN_API=true`, `WORKER_CONCURRENCY=2`, `SEED_ON_START=true`, `OTP_PROVIDER=console`.
 - `JWT_SECRET` and `TOTP_ENCRYPTION_KEY`, generated by Render. **Never rotate
   `TOTP_ENCRYPTION_KEY`**: doing so locks out every admin's 2FA.
 
@@ -126,6 +146,19 @@ Optional api variables: `ACCESS_TOKEN_TTL_SEC` (900), `STUDENT_REFRESH_TTL_DAYS`
 
 Every variable is validated at startup (`apps/api/src/env.ts`, `apps/worker/src/env.ts`). If one
 is wrong, the process exits and prints the name of each bad variable.
+
+### Moving to paid plans
+
+Nothing in the code changes. You swap plans and env vars:
+
+| Step        | Change                                                                                                                                                                                                                 |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Render      | Rename `render.paid.yaml` to `render.yaml` and re-sync the Blueprint. You get a paid api service (seed runs as the pre-deploy step) plus a separate background worker. `RUN_WORKER_IN_API` and `SEED_ON_START` are off |
+| Database    | Upgrade Atlas to M10 or higher for backups and more space                                                                                                                                                              |
+| Redis       | Keep Redis Cloud on a paid plan, or use Upstash pay-as-you-go (`rediss://` URL)                                                                                                                                        |
+| Figures     | Keep R2 (cheap: no bandwidth fees), or switch to AWS S3: remove `S3_ENDPOINT`, set a real region and IAM keys                                                                                                          |
+| SMS OTP     | `OTP_PROVIDER=msg91` with `MSG91_AUTH_KEY` and `MSG91_TEMPLATE_ID` (needs a DLT-registered template containing `##otp##`)                                                                                              |
+| web + admin | Vercel Pro                                                                                                                                                                                                             |
 
 ## Auth
 
