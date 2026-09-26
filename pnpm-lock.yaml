@@ -212,6 +212,9 @@ importers:
       eslint:
         specifier: ^9.39.5
         version: 9.39.5
+      ioredis:
+        specifier: ^5.8.0
+        version: 5.11.1
       mongoose:
         specifier: ^9.10.2
         version: 9.10.2

@@ -13,3 +13,6 @@ export * from "./models/test.js";
 export * from "./models/upload.js";
 export * from "./models/user.js";
 export * from "./flags.js";
+export * from "./models/attempt.js";
+export * from "./scoring.js";
+export * from "./attemptStore.js";

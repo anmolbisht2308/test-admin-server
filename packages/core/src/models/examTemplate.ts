@@ -19,6 +19,7 @@ export interface ExamTemplateAttrs {
   sections: { name: string; count: number; timeSec?: number; aliases: string[] }[];
   marking: Marking;
   markingByType?: Partial<Record<QuestionType, Marking>>;
+  multiPartial?: boolean;
   qualifyingPercent?: number;
   createdAt: Date;
   updatedAt: Date;
@@ -51,6 +52,7 @@ const templateSchema = new Schema<ExamTemplateAttrs>(
     ],
     marking: { type: markingSchema, required: true },
     markingByType: { type: Schema.Types.Mixed, default: undefined },
+    multiPartial: Boolean,
     qualifyingPercent: Number,
   },
   // Validation lives in the Zod schema (@mockprep/types); Mongoose only stores.
@@ -82,6 +84,7 @@ export const toTemplateSnapshot = (t: ExamTemplateAttrs): TemplateSnapshot => ({
   })),
   marking: { correct: t.marking.correct, wrong: t.marking.wrong },
   ...(t.markingByType ? { markingByType: t.markingByType } : {}),
+  ...(t.multiPartial ? { multiPartial: true } : {}),
   ...(t.qualifyingPercent === undefined || t.qualifyingPercent === null
     ? {}
     : { qualifyingPercent: t.qualifyingPercent }),

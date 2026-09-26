@@ -25,6 +25,7 @@
     "@mockprep/types": "workspace:*"
   },
   "peerDependencies": {
+    "ioredis": "^5.8.0",
     "mongoose": "^9.10.2",
     "pino": "^10.3.1"
   },
@@ -32,6 +33,7 @@
     "@mockprep/config": "workspace:*",
     "@types/node": "^22.19.0",
     "eslint": "^9.39.5",
+    "ioredis": "^5.8.0",
     "mongoose": "^9.10.2",
     "pino": "^10.3.1",
     "typescript": "~5.9.3",

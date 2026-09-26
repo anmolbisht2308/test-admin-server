@@ -50,6 +50,7 @@ export const toTemplateDto = (t: WithId<ExamTemplateAttrs>): ExamTemplate => ({
   })),
   marking: { correct: t.marking.correct, wrong: t.marking.wrong },
   ...(t.markingByType ? { markingByType: t.markingByType } : {}),
+  ...(t.multiPartial ? { multiPartial: true } : {}),
   ...(t.qualifyingPercent === undefined || t.qualifyingPercent === null
     ? {}
     : { qualifyingPercent: t.qualifyingPercent }),

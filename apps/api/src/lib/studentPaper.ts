@@ -39,6 +39,7 @@ export function toStudentPaper(
       sectionSwitching: t.sectionSwitching,
       marking: t.marking,
       ...(t.markingByType ? { markingByType: t.markingByType } : {}),
+      ...(t.multiPartial ? { multiPartial: true } : {}),
       ...(t.qualifyingPercent === undefined || t.qualifyingPercent === null
         ? {}
         : { qualifyingPercent: t.qualifyingPercent }),

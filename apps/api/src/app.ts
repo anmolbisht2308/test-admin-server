@@ -25,6 +25,8 @@ import { LocalStorage, createStorage, type Storage } from "@mockprep/core";
 import { localStorageRouter } from "./routes/storage.js";
 import type { EnqueueIngest } from "./routes/admin/uploads.js";
 import { createIngestEnqueuer } from "./services/ingestQueue.js";
+import { attemptsRouter } from "./routes/attempts.js";
+import { createScoreEnqueuer, type EnqueueScore } from "./services/scoreQueue.js";
 
 export interface AppDeps {
   env: Env;
@@ -41,6 +43,8 @@ export interface AppDeps {
   storage?: Storage;
   /** Queues PDF ingest runs. Defaults to the BullMQ "ingest" queue on `redis`. */
   enqueueIngest?: EnqueueIngest;
+  /** Queues attempt scoring. Defaults to the BullMQ "score" queue on `redis`. */
+  enqueueScore?: EnqueueScore;
   /** Extra routers mounted under /api after the feature routers. */
   routers?: Router[];
 }
@@ -111,6 +115,7 @@ export function createApp(deps: AppDeps): Express {
 
   app.use("/api/auth", studentAuthRouter(ctx));
   app.use("/api/me", meRouter(ctx));
+  app.use("/api/attempts", attemptsRouter(ctx, deps.enqueueScore ?? createScoreEnqueuer(redis)));
   app.use("/api/exams", catalogueRouter());
   const enqueueIngest = deps.enqueueIngest ?? createIngestEnqueuer(redis);
   app.use("/api/admin", adminRouter(ctx, storage, enqueueIngest));

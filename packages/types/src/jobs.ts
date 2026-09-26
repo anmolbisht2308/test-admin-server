@@ -4,6 +4,10 @@ import { z } from "zod";
 export const QUEUE = {
   ping: "ping",
   ingest: "ingest",
+  /** Scores a submitted attempt. */
+  score: "score",
+  /** Repeating housekeeping: flush Redis answers to Mongo, auto-submit expired attempts. */
+  attempts: "attempts",
 } as const;
 export type QueueName = (typeof QUEUE)[keyof typeof QUEUE];
 
@@ -28,3 +32,6 @@ export type IngestJobData = z.infer<typeof ingestJobDataSchema>;
  * while a retry (next run) always gets a fresh job.
  */
 export const ingestJobId = (uploadId: string, run: number) => `ingest-${uploadId}-${run}`;
+
+export const scoreJobDataSchema = z.object({ attemptId: z.string().regex(/^[a-f\d]{24}$/i) });
+export type ScoreJobData = z.infer<typeof scoreJobDataSchema>;

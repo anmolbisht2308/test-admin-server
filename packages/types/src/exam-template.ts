@@ -50,6 +50,11 @@ export const examTemplateCoreSchema = z.object({
   marking: markingSchema,
   /** Per-question-type overrides of `marking`. */
   markingByType: z.partialRecord(questionTypeSchema, markingSchema).optional(),
+  /**
+   * Multi-correct questions give partial credit: each correct option chosen earns
+   * correct / (number of correct options); any wrong option chosen earns the wrong marks.
+   */
+  multiPartial: z.boolean().optional(),
   /** Paper is qualifying: pass mark as % of max marks (e.g. CSAT 33). */
   qualifyingPercent: z.number().min(0).max(100).optional(),
 });

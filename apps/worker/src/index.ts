@@ -25,7 +25,7 @@ const runtime = await startWorkers({
   logger,
   concurrency: env.WORKER_CONCURRENCY,
   source: "worker-startup",
-  ...(ingest ? { ingest } : {}),
+  ...(ingest ? { ingest, attempts: {} } : {}),
 });
 
 let shuttingDown = false;

@@ -210,6 +210,7 @@ export const studentPaperSchema = z
       sectionSwitching: true,
       marking: true,
       markingByType: true,
+      multiPartial: true,
       qualifyingPercent: true,
     }),
     sections: z.array(

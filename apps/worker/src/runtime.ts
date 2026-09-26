@@ -1,9 +1,16 @@
 import { UNFINISHED_UPLOAD_STATUSES, UploadModel, type Storage } from "@mockprep/core";
-import { QUEUE, ingestJobId, type IngestJobData, type PingJobData } from "@mockprep/types";
+import {
+  QUEUE,
+  ingestJobId,
+  type IngestJobData,
+  type PingJobData,
+  type ScoreJobData,
+} from "@mockprep/types";
 import { Queue, Worker } from "bullmq";
 import { Redis } from "ioredis";
 import type { Logger } from "pino";
 import { createGeminiClient, type AiClient, type RetryOptions } from "./ingest/aiExtractor.js";
+import { createAttemptHousekeeping, createScoreProcessor } from "./jobs/attempts.js";
 import { createIngestProcessor } from "./jobs/ingest.js";
 import { createPingProcessor } from "./jobs/ping.js";
 
@@ -26,6 +33,8 @@ export interface WorkerRuntimeOptions {
   source: string;
   /** PDF ingest (needs a Mongo connection opened by the caller). Omit to run only ping. */
   ingest?: IngestOptions;
+  /** Test attempts: scoring + answer flush / auto-submit (needs Mongo). */
+  attempts?: { housekeepingEveryMs?: number };
 }
 
 export interface WorkerRuntime {
@@ -43,6 +52,7 @@ export async function startWorkers({
   concurrency,
   source,
   ingest,
+  attempts,
 }: WorkerRuntimeOptions): Promise<WorkerRuntime> {
   // BullMQ workers need maxRetriesPerRequest: null so blocking commands never time out.
   const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
@@ -76,7 +86,44 @@ export async function startWorkers({
     worker.on("error", (err) => logger.error({ queue: worker.name, err }, "worker error"));
   }
 
+  let store: Redis | undefined;
+  let housekeepingQueue: Queue | undefined;
+  if (attempts) {
+    // Plain commands (answer store) on their own connection, apart from BullMQ's.
+    store = new Redis(redisUrl, { maxRetriesPerRequest: 3 });
+    store.on("error", (err) => logger.warn({ err }, "attempt store redis error"));
+    const scoreQueue = new Queue<ScoreJobData>(QUEUE.score, { connection });
+    housekeepingQueue = new Queue(QUEUE.attempts, { connection });
+    queues.push(scoreQueue, housekeepingQueue);
+    const enqueueScore = (attemptId: string) =>
+      scoreQueue.add(
+        "score",
+        { attemptId },
+        {
+          jobId: `score-${attemptId}`,
+          attempts: 3,
+          backoff: { type: "exponential", delay: 1000 },
+          removeOnComplete: 1000,
+          removeOnFail: 1000,
+        },
+      );
+    workers.push(
+      new Worker(QUEUE.score, createScoreProcessor(logger), { connection, concurrency }),
+      new Worker(QUEUE.attempts, createAttemptHousekeeping(store, enqueueScore, logger), {
+        connection,
+        concurrency: 1,
+      }),
+    );
+  }
   await Promise.all(workers.map((w) => w.waitUntilReady()));
+  if (housekeepingQueue) {
+    // One schedule shared by every worker process (upsert = no duplicates across restarts).
+    await housekeepingQueue.upsertJobScheduler(
+      "attempts-housekeeping",
+      { every: attempts?.housekeepingEveryMs ?? 30_000 },
+      { name: "housekeeping", opts: { removeOnComplete: 10, removeOnFail: 50 } },
+    );
+  }
   logger.info({ queues: workers.map((w) => w.name), source }, "worker started");
   await pingQueue.add(
     "startup",
@@ -104,6 +151,7 @@ export async function startWorkers({
     async close() {
       await Promise.allSettled(workers.map((worker) => worker.close()));
       await Promise.allSettled(queues.map((queue) => queue.close()));
+      await store?.quit();
       await connection.quit();
       logger.info("worker stopped");
     },

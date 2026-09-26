@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "seed": "tsx --env-file-if-exists=.env src/scripts/seed.ts",
-    "seed:prod": "node dist/scripts/seed.js"
+    "seed:prod": "node dist/scripts/seed.js",
+    "loadtest:seed": "tsx --env-file-if-exists=.env src/scripts/loadtestSeed.ts"
   },
   "dependencies": {
     "@mockprep/core": "workspace:*",
