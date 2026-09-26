@@ -16,7 +16,12 @@ import { getAuth, requireRole } from "../../middleware/auth.js";
 import { QuestionModel, type QuestionAttrs } from "@mockprep/core";
 import { TaxonomyModel } from "@mockprep/core";
 import { recordAudit, recordAuditMany } from "../../services/audit.js";
-import { createQuestion, idsInTests, saveQuestion } from "../../services/questions.js";
+import {
+  approveQuestion,
+  createQuestion,
+  idsInTests,
+  saveQuestion,
+} from "../../services/questions.js";
 import { CONTENT_WRITERS, parseId } from "./common.js";
 
 const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -159,6 +164,29 @@ export function adminQuestionsRouter(): Router {
         after: { ...dto, ...(versioned ? { newVersionOf: before.id } : {}) },
       });
       const body: QuestionSaveResponse = { question: dto, versioned };
+      res.json(body);
+    }),
+  );
+
+  router.post(
+    "/:id/approve",
+    write,
+    asyncHandler(async (req, res) => {
+      const doc = await QuestionModel.findById(parseId(req.params.id, "Question"));
+      if (!doc) throw notFoundError("Question");
+      if (!doc.isLatest) throw conflictError("This is an old version. Approve the latest version.");
+      const before = toQuestionDto(doc);
+      await approveQuestion(doc);
+      const dto = toQuestionDto(doc);
+      await recordAudit({
+        actorId: getAuth(req).userId,
+        entity: "question",
+        entityId: dto.rootId,
+        action: "update",
+        before,
+        after: dto,
+      });
+      const body: QuestionSaveResponse = { question: dto, versioned: false };
       res.json(body);
     }),
   );

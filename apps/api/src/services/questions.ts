@@ -1,5 +1,5 @@
-import { questionHash } from "@mockprep/core";
-import type { ExamFamily, QuestionData } from "@mockprep/types";
+import { DUPLICATE_FLAGS, contentFlags, questionHash } from "@mockprep/core";
+import { questionInputSchema, type ExamFamily, type QuestionData } from "@mockprep/types";
 import { Types } from "mongoose";
 import { toQuestionDto } from "../lib/dto.js";
 import { HttpError, conflictError, notFoundError } from "../lib/httpError.js";
@@ -48,6 +48,41 @@ async function withDuplicateFlag(flags: string[], hash: string, rootId: Types.Ob
   });
   const rest = flags.filter((f) => f !== "duplicate");
   return clash ? [...rest, "duplicate"] : rest;
+}
+
+/**
+ * Flags after an edit. Questions from a PDF upload get their review flags recomputed (approved
+ * ones have none); other questions only track "duplicate".
+ */
+async function flagsAfterEdit(
+  current: QuestionAttrs & { _id: Types.ObjectId },
+  data: QuestionData,
+  hash: string,
+) {
+  const flags = await withDuplicateFlag(current.flags, hash, current.rootId);
+  if (!current.uploadId) return flags;
+  if (data.status === "approved") return [];
+  const test = await TestModel.findOne({ "sections.questionIds": current._id })
+    .select({ "templateSnapshot.optionCount": 1 })
+    .lean();
+  const optionCount = test?.templateSnapshot.optionCount ?? data.options.length;
+  const kept = flags.filter((f) => (DUPLICATE_FLAGS as readonly string[]).includes(f));
+  return [...contentFlags(data, optionCount), ...kept];
+}
+
+/** Marks a question reviewed: approved, flags cleared. 400 when it is not complete enough. */
+export async function approveQuestion(doc: InstanceType<typeof QuestionModel>) {
+  const check = questionInputSchema.safeParse({ ...toQuestionDto(doc), status: "approved" });
+  if (!check.success) {
+    const issue = check.error.issues[0];
+    throw new HttpError(400, `Can't approve: ${issue?.message ?? "the question is incomplete"}`, {
+      issues: check.error.issues,
+    });
+  }
+  doc.status = "approved";
+  doc.flags = [];
+  await doc.save();
+  return doc;
 }
 
 const toDoc = (data: QuestionData) => ({
@@ -105,7 +140,7 @@ export async function saveQuestion(id: string, data: QuestionData) {
   const before = toQuestionDto(current);
 
   const hash = questionHash(data);
-  const flags = await withDuplicateFlag(current.flags, hash, current.rootId);
+  const flags = await flagsAfterEdit(current, data, hash);
   const examFamily = await examFamilyFor(data.examKey);
   const published = await TestModel.exists({
     status: "published",

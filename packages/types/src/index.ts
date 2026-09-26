@@ -8,4 +8,5 @@ export * from "./jobs.js";
 export * from "./question.js";
 export * from "./taxonomy.js";
 export * from "./test.js";
+export * from "./upload.js";
 export * from "./user.js";

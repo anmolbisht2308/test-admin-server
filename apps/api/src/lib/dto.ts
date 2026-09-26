@@ -5,6 +5,7 @@ import type {
   Series,
   TaxonomyNode,
   Test,
+  Upload,
   User,
 } from "@mockprep/types";
 import type { Types } from "mongoose";
@@ -14,6 +15,7 @@ import type { QuestionAttrs } from "@mockprep/core";
 import type { SeriesAttrs } from "@mockprep/core";
 import type { TaxonomyAttrs } from "@mockprep/core";
 import type { TestAttrs } from "@mockprep/core";
+import type { UploadAttrs, UploadFile } from "@mockprep/core";
 import type { UserAttrs } from "@mockprep/core";
 
 type WithId<T> = T & { _id: Types.ObjectId };
@@ -128,6 +130,7 @@ export const toTestDto = (t: WithId<TestAttrs>): Test => ({
     questionIds: s.questionIds.map(String),
   })),
   testFlags: [...t.testFlags],
+  uploadId: t.uploadId ? t.uploadId.toString() : null,
   status: t.status,
   isFree: t.isFree,
   publishAt: t.publishAt ? t.publishAt.toISOString() : null,
@@ -148,4 +151,29 @@ export const toSeriesDto = (s: WithId<SeriesAttrs>): Series => ({
   })),
   createdAt: s.createdAt.toISOString(),
   updatedAt: s.updatedAt.toISOString(),
+});
+
+const toFileDto = (f: UploadFile) => ({ name: f.name, contentType: f.contentType, url: f.url });
+
+export const toUploadDto = (u: WithId<UploadAttrs>): Upload => ({
+  id: u._id.toString(),
+  title: u.title,
+  examKey: u.examKey,
+  templateKey: u.templateKey,
+  files: {
+    paper: toFileDto(u.files.paper),
+    key: u.files.key ? toFileDto(u.files.key) : null,
+    solutions: u.files.solutions ? toFileDto(u.files.solutions) : null,
+  },
+  status: u.status,
+  progress: u.progress,
+  message: u.message,
+  log: u.log.map((l) => ({ at: l.at.toISOString(), level: l.level, message: l.message })),
+  stats: u.stats,
+  testId: u.testId ? u.testId.toString() : null,
+  error: u.error,
+  startedAt: u.startedAt ? u.startedAt.toISOString() : null,
+  finishedAt: u.finishedAt ? u.finishedAt.toISOString() : null,
+  createdAt: u.createdAt.toISOString(),
+  updatedAt: u.updatedAt.toISOString(),
 });

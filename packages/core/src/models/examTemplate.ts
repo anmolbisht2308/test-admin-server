@@ -4,6 +4,7 @@ import type {
   QuestionType,
   SectionSwitching,
   TemplateSkin,
+  TemplateSnapshot,
 } from "@mockprep/types";
 import { Schema, model } from "mongoose";
 
@@ -63,3 +64,25 @@ export const ExamTemplateModel = model<ExamTemplateAttrs>(
   templateSchema,
   "examTemplates",
 );
+
+/** Frozen copy of a template stored on tests (so later template edits never change old tests). */
+export const toTemplateSnapshot = (t: ExamTemplateAttrs): TemplateSnapshot => ({
+  key: t.key,
+  name: t.name,
+  family: t.family,
+  skin: t.skin,
+  totalTimeSec: t.totalTimeSec,
+  optionCount: t.optionCount,
+  sectionSwitching: t.sectionSwitching,
+  sections: t.sections.map((s) => ({
+    name: s.name,
+    count: s.count,
+    ...(s.timeSec === undefined || s.timeSec === null ? {} : { timeSec: s.timeSec }),
+    aliases: [...s.aliases],
+  })),
+  marking: { correct: t.marking.correct, wrong: t.marking.wrong },
+  ...(t.markingByType ? { markingByType: t.markingByType } : {}),
+  ...(t.qualifyingPercent === undefined || t.qualifyingPercent === null
+    ? {}
+    : { qualifyingPercent: t.qualifyingPercent }),
+});

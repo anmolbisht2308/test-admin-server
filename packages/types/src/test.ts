@@ -36,7 +36,10 @@ export const testSchema = z.object({
   type: testTypeSchema,
   templateSnapshot: templateSnapshotSchema,
   sections: z.array(testSectionSchema),
+  /** Test-level problems found by the PDF pipeline, as readable messages. */
   testFlags: z.array(z.string()),
+  /** Set when the test was created from a PDF upload. */
+  uploadId: objectIdSchema.nullable(),
   status: testStatusSchema,
   isFree: z.boolean(),
   /** When students may see the test (null = as soon as it is published). */
@@ -144,6 +147,10 @@ export const testSummarySchema = z.object({
   isFree: z.boolean(),
   questionCount: z.number().int(),
   expectedCount: z.number().int(),
+  /** Draft (unreviewed) questions in the test. */
+  toReview: z.number().int(),
+  /** Set when the test was created from a PDF upload. */
+  uploadId: objectIdSchema.nullable(),
   publishAt: isoDateSchema.nullable(),
   publishedAt: isoDateSchema.nullable(),
   updatedAt: isoDateSchema,

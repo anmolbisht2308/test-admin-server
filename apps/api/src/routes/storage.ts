@@ -1,4 +1,4 @@
-import { MAX_FIGURE_BYTES, figurePresignInputSchema } from "@mockprep/types";
+import { MAX_UPLOAD_BYTES, figurePresignInputSchema } from "@mockprep/types";
 import express, { Router } from "express";
 import { HttpError } from "../lib/httpError.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
@@ -29,7 +29,8 @@ export function localStorageRouter(storage: LocalStorage): Router {
   const router = Router();
   router.put(
     "/storage/local/*key",
-    express.raw({ type: () => true, limit: MAX_FIGURE_BYTES }),
+    // The signature pins the exact size; this is only the hard ceiling (question-paper PDFs).
+    express.raw({ type: () => true, limit: MAX_UPLOAD_BYTES }),
     asyncHandler(async (req, res) => {
       const key = ([] as string[]).concat(req.params.key ?? []).join("/");
       const body = Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0);

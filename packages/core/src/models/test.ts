@@ -8,6 +8,7 @@ export interface TestAttrs {
   templateSnapshot: TemplateSnapshot;
   sections: { name: string; timeSec?: number; questionIds: Types.ObjectId[] }[];
   testFlags: string[];
+  uploadId: Types.ObjectId | null;
   status: TestStatus;
   isFree: boolean;
   publishAt: Date | null;
@@ -34,6 +35,7 @@ const testSchema = new Schema<TestAttrs>(
       ),
     ],
     testFlags: { type: [String], default: [] },
+    uploadId: { type: Schema.Types.ObjectId, ref: "Upload", default: null },
     status: { type: String, default: "draft" },
     isFree: { type: Boolean, default: true },
     publishAt: { type: Date, default: null },

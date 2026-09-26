@@ -69,6 +69,14 @@ services:
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
         sync: false
+      # PDF → test: free Google AI Studio key (https://aistudio.google.com/apikey). Leave empty to
+      # use the free text parser (text PDFs only; scans and image keys need the key).
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-flash-latest
+      - key: CHUNK_PAGES
+        value: "6"
       - key: SEED_ADMIN_EMAIL
         sync: false
       - key: SEED_ADMIN_PASSWORD
@@ -93,3 +101,28 @@ services:
         value: "5"
       - key: REDIS_URL
         sync: false
+      # PDF ingest reads uploaded papers from the same Mongo + storage as the api.
+      - key: MONGODB_URI
+        sync: false
+      - key: STORAGE_DRIVER
+        value: s3
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        sync: false
+      - key: S3_ENDPOINT
+        sync: false
+      - key: S3_PUBLIC_BASE_URL
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      # PDF → test: free Google AI Studio key (https://aistudio.google.com/apikey). Leave empty to
+      # use the free text parser (text PDFs only; scans and image keys need the key).
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-flash-latest
+      - key: CHUNK_PAGES
+        value: "6"

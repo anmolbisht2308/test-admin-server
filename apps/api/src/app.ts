@@ -23,6 +23,8 @@ import { RedisRateLimitStore } from "./services/rateLimit.js";
 import { createSessionService } from "./services/sessions.js";
 import { LocalStorage, createStorage, type Storage } from "@mockprep/core";
 import { localStorageRouter } from "./routes/storage.js";
+import type { EnqueueIngest } from "./routes/admin/uploads.js";
+import { createIngestEnqueuer } from "./services/ingestQueue.js";
 
 export interface AppDeps {
   env: Env;
@@ -37,6 +39,8 @@ export interface AppDeps {
   googleVerifier?: GoogleVerifier | null;
   /** Defaults from STORAGE_DRIVER (local disk or S3). */
   storage?: Storage;
+  /** Queues PDF ingest runs. Defaults to the BullMQ "ingest" queue on `redis`. */
+  enqueueIngest?: EnqueueIngest;
   /** Extra routers mounted under /api after the feature routers. */
   routers?: Router[];
 }
@@ -108,7 +112,8 @@ export function createApp(deps: AppDeps): Express {
   app.use("/api/auth", studentAuthRouter(ctx));
   app.use("/api/me", meRouter(ctx));
   app.use("/api/exams", catalogueRouter());
-  app.use("/api/admin", adminRouter(ctx, storage));
+  const enqueueIngest = deps.enqueueIngest ?? createIngestEnqueuer(redis);
+  app.use("/api/admin", adminRouter(ctx, storage, enqueueIngest));
   for (const router of routers) app.use("/api", router);
 
   app.use(notFound);

@@ -1,6 +1,8 @@
 import {
   testCreateInputSchema,
   testFillInputSchema,
+  testPublishInputSchema,
+  type ApproveAnsweredResponse,
   testUpdateInputSchema,
   type AdminTestResponse,
   type TestFillResponse,
@@ -18,7 +20,8 @@ import { ExamModel } from "@mockprep/core";
 import { ExamTemplateModel } from "@mockprep/core";
 import { QuestionModel } from "@mockprep/core";
 import { TestModel, type TestAttrs } from "@mockprep/core";
-import { recordAudit } from "../../services/audit.js";
+import { recordAudit, recordAuditMany } from "../../services/audit.js";
+import { approveQuestion } from "../../services/questions.js";
 import {
   allQuestionIds,
   computeChecks,
@@ -61,6 +64,15 @@ export function adminTestsRouter(): Router {
         .sort({ updatedAt: -1 })
         .limit(500)
         .lean();
+      // One query for every draft (unreviewed) question across the listed tests.
+      const drafts = new Set(
+        (
+          await QuestionModel.find({
+            _id: { $in: tests.flatMap(allQuestionIds) },
+            status: "draft",
+          }).distinct("_id")
+        ).map(String),
+      );
       const body: TestListResponse = {
         tests: tests.map((t) => ({
           id: t._id.toString(),
@@ -72,6 +84,8 @@ export function adminTestsRouter(): Router {
           isFree: t.isFree,
           questionCount: allQuestionIds(t).length,
           expectedCount: t.templateSnapshot.sections.reduce((acc, s) => acc + s.count, 0),
+          toReview: allQuestionIds(t).filter((id) => drafts.has(id.toString())).length,
+          uploadId: t.uploadId ? t.uploadId.toString() : null,
           publishAt: t.publishAt ? t.publishAt.toISOString() : null,
           publishedAt: t.publishedAt ? t.publishedAt.toISOString() : null,
           updatedAt: t.updatedAt.toISOString(),
@@ -214,10 +228,26 @@ export function adminTestsRouter(): Router {
     "/:id/publish",
     write,
     asyncHandler(async (req, res) => {
+      const { force } = testPublishInputSchema.parse(req.body ?? {});
       const test = await findTest(req.params.id);
       assertDraft(test);
       const { checks } = await detail(test);
-      if (!checks.ok) throw new HttpError(409, "Fix the checks before publishing", checks);
+      // Missing questions or answers always block. Everything else (unreviewed drafts, counts
+      // that differ from the template, option counts, duplicates) can be overridden with force.
+      const blocking =
+        checks.questionCount.actual === 0 ||
+        checks.missing.length > 0 ||
+        checks.missingAnswers.length > 0;
+      if (blocking || (!checks.ok && !force)) {
+        const message = checks.missingAnswers.length
+          ? `${checks.missingAnswers.length} question(s) have no answer`
+          : checks.questionCount.actual === 0
+            ? "The test has no questions"
+            : checks.drafts.length
+              ? `${checks.drafts.length} question(s) are not reviewed yet`
+              : "Fix the checks before publishing";
+        throw new HttpError(409, message, { ...checks, canForce: !blocking });
+      }
       const before = toTestDto(test);
       test.status = "published";
       test.publishedAt = new Date();
@@ -231,6 +261,44 @@ export function adminTestsRouter(): Router {
         after: toTestDto(test),
       });
       res.json(await detail(test));
+    }),
+  );
+
+  router.post(
+    "/:id/approve-answered",
+    write,
+    asyncHandler(async (req, res) => {
+      const test = await findTest(req.params.id);
+      const drafts = await QuestionModel.find({
+        _id: { $in: allQuestionIds(test) },
+        status: "draft",
+      });
+      const actorId = getAuth(req).userId;
+      const entries = [];
+      for (const doc of drafts) {
+        const before = toQuestionDto(doc);
+        try {
+          await approveQuestion(doc);
+        } catch (err) {
+          // Not complete (no stem, no answer, figure missing…): it stays for review.
+          if (err instanceof HttpError && err.status === 400) continue;
+          throw err;
+        }
+        entries.push({
+          actorId,
+          entity: "question",
+          entityId: doc.rootId.toString(),
+          action: "update" as const,
+          before,
+          after: toQuestionDto(doc),
+        });
+      }
+      await recordAuditMany(entries);
+      const body: ApproveAnsweredResponse = {
+        approved: entries.length,
+        remaining: drafts.length - entries.length,
+      };
+      res.json(body);
     }),
   );
 

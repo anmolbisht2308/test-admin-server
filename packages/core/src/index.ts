@@ -10,4 +10,6 @@ export * from "./models/series.js";
 export * from "./models/session.js";
 export * from "./models/taxonomy.js";
 export * from "./models/test.js";
+export * from "./models/upload.js";
 export * from "./models/user.js";
+export * from "./flags.js";

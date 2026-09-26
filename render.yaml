@@ -75,6 +75,14 @@ services:
         sync: false
       - key: AWS_SECRET_ACCESS_KEY
         sync: false
+      # PDF → test: free Google AI Studio key (https://aistudio.google.com/apikey). Leave empty to
+      # use the free text parser (text PDFs only; scans and image keys need the key).
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GEMINI_MODEL
+        value: gemini-flash-latest
+      - key: CHUNK_PAGES
+        value: "6"
       - key: SEED_ADMIN_EMAIL
         sync: false
       - key: SEED_ADMIN_PASSWORD

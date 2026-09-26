@@ -18,6 +18,7 @@
     "@mockprep/types": "workspace:*",
     "@mockprep/worker": "workspace:*",
     "argon2": "^0.45.1",
+    "bullmq": "^6.3.9",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "exceljs": "^4.4.0",

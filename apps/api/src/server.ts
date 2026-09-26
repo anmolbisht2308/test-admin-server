@@ -1,7 +1,7 @@
 import type { WorkerRuntime } from "@mockprep/worker/runtime";
 import mongoose from "mongoose";
 import { createApp } from "./app.js";
-import { connectMongo, isMongoUp } from "@mockprep/core";
+import { connectMongo, createStorage, isMongoUp } from "@mockprep/core";
 import { loadEnv } from "./env.js";
 import { createLogger } from "./logger.js";
 import { createRedis, pingRedis } from "./redis.js";
@@ -16,10 +16,12 @@ if (env.NODE_ENV === "production" && env.STORAGE_DRIVER === "local") {
   );
 }
 
+const storage = createStorage(env);
 const app = createApp({
   env,
   logger,
   redis,
+  storage,
   health: { db: isMongoUp, redis: () => pingRedis(redis), version: env.version },
 });
 
@@ -31,34 +33,39 @@ const server = app.listen(env.PORT, () => {
 connectMongo(env.MONGODB_URI, logger)
   .then(async () => {
     // Free hosting has no pre-deploy step: seed here instead (idempotent, never overwrites edits).
-    if (!env.SEED_ON_START) return;
-    await seedCatalogue();
-    if (env.SEED_ADMIN_EMAIL && env.SEED_ADMIN_PASSWORD) {
-      await seedAdmin(env.SEED_ADMIN_EMAIL, env.SEED_ADMIN_PASSWORD, logger);
+    if (env.SEED_ON_START) {
+      await seedCatalogue();
+      if (env.SEED_ADMIN_EMAIL && env.SEED_ADMIN_PASSWORD) {
+        await seedAdmin(env.SEED_ADMIN_EMAIL, env.SEED_ADMIN_PASSWORD, logger);
+      }
+      logger.info("startup seed done");
     }
-    logger.info("startup seed done");
+    if (env.RUN_WORKER_IN_API) {
+      startEmbeddedWorkers().catch((err: unknown) =>
+        logger.error({ err }, "embedded worker failed to start"),
+      );
+    }
   })
   .catch((err: unknown) => {
     logger.fatal({ err }, "mongo connection or startup seed failed");
     process.exit(1);
   });
 
-// Free hosting: run the queue workers in this process (one service instead of api + worker).
+// Free hosting: run the queue workers (incl. PDF ingest) in this process once Mongo is up.
 let workers: WorkerRuntime | undefined;
-if (env.RUN_WORKER_IN_API) {
-  import("@mockprep/worker/runtime")
-    .then(({ startWorkers }) =>
-      startWorkers({
-        redisUrl: env.REDIS_URL,
-        logger,
-        concurrency: env.WORKER_CONCURRENCY,
-        source: "api-embedded",
-      }),
-    )
-    .then((runtime) => {
-      workers = runtime;
-    })
-    .catch((err: unknown) => logger.error({ err }, "embedded worker failed to start"));
+async function startEmbeddedWorkers() {
+  const { startWorkers, createGeminiClient } = await import("@mockprep/worker/runtime");
+  workers = await startWorkers({
+    redisUrl: env.REDIS_URL,
+    logger,
+    concurrency: env.WORKER_CONCURRENCY,
+    source: "api-embedded",
+    ingest: {
+      storage,
+      ai: env.GEMINI_API_KEY ? createGeminiClient(env.GEMINI_API_KEY, env.GEMINI_MODEL) : null,
+      chunkPages: env.CHUNK_PAGES,
+    },
+  });
 }
 
 let shuttingDown = false;

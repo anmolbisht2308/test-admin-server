@@ -10,11 +10,16 @@ import { adminQuestionImportRouter } from "./questionImport.js";
 import { adminQuestionsRouter } from "./questions.js";
 import { adminSeriesRouter } from "./series.js";
 import { adminTestsRouter } from "./tests.js";
+import { adminUploadsRouter, type EnqueueIngest } from "./uploads.js";
 import { adminTaxonomyRouter } from "./taxonomy.js";
 import { adminTemplatesRouter } from "./templates.js";
 
 /** /api/admin: auth is public; everything else needs an admin role. */
-export function adminRouter(ctx: AppContext, storage: Storage): Router {
+export function adminRouter(
+  ctx: AppContext,
+  storage: Storage,
+  enqueueIngest: EnqueueIngest,
+): Router {
   const router = Router();
   router.use("/auth", adminAuthRouter(ctx));
 
@@ -29,6 +34,7 @@ export function adminRouter(ctx: AppContext, storage: Storage): Router {
   guarded.use("/tests", adminTestsRouter());
   guarded.use("/series", adminSeriesRouter());
   guarded.use("/figures", adminFiguresRouter(storage));
+  guarded.use("/uploads", adminUploadsRouter(ctx, storage, enqueueIngest));
   router.use(guarded);
   return router;
 }

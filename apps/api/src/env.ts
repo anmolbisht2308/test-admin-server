@@ -79,6 +79,13 @@ export const envSchema = z
     /** S3-compatible endpoint, e.g. Cloudflare R2: https://<account-id>.r2.cloudflarestorage.com */
     S3_ENDPOINT: z.url().optional(),
 
+    // ----- PDF → test pipeline (the worker reads the same variables) -----
+    /** Google AI Studio key (free tier). Empty = the free text parser (no scans / image keys). */
+    GEMINI_API_KEY: z.string().optional(),
+    GEMINI_MODEL: z.string().default("gemini-flash-latest"),
+    /** Pages per AI request; chunks overlap by one page. */
+    CHUNK_PAGES: z.coerce.number().int().min(2).max(30).default(6),
+
     // ----- free-hosting switches (single Render free web service) -----
     /** Run the BullMQ workers inside this process instead of a separate worker service. */
     RUN_WORKER_IN_API: bool.default(false),
