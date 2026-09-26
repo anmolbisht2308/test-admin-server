@@ -243,11 +243,12 @@ export function attemptsRouter(ctx: AppContext, enqueueScore: EnqueueScore): Rou
       const userId = getAuth(req).userId;
       const { id, meta } = await ownMeta(req.params.id, userId);
       if (meta.status === "in_progress") {
-        const late = Date.now() > meta.deadline + ANSWER_GRACE_MS;
+        // The screen submits by itself when the clock hits zero: that (or later) is a timeout.
+        const timedOut = Date.now() >= meta.deadline - 2000;
         const ok = await submitAttempt(
           redis,
           id,
-          late ? "timeout" : "manual",
+          timedOut ? "timeout" : "manual",
           answers.filter((a) => canSaveAnswer(meta, a)),
         );
         if (ok) await enqueueScore(id);

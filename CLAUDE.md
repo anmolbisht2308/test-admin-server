@@ -43,22 +43,23 @@ apps/api/src/  Express 5 + Mongoose. env.ts (Zod, fail fast) · app.ts createApp
   context.ts (AppContext for route factories) · middleware/ (asyncHandler, errorHandler, auth)
   lib/ (httpError, tokens, totp, cookies, dto mappers, studentPaper serializer)
   services/ (otp, sessions, google, rateLimit, audit, questions (versioning, approve),
-    questionImport (exceljs), testBuilder (checks + rule fill), ingestQueue)
-  routes/ (auth, adminAuth, me, catalogue, storage, admin/* incl. uploads) · scripts/ (seed)
+    questionImport (exceljs), testBuilder (checks + rule fill), ingestQueue, scoreQueue)
+  routes/ (auth, adminAuth, me, catalogue (+ /api/tests/:id), attempts, storage, admin/*)
+  scripts/ (seed, loadtestSeed) · loadtest/ (k6 save-answers.js, README) at repo root
 apps/api/test/ supertest vs createApp; helpers.ts (db, logins), factories.ts (seed, makeQuestion)
 apps/worker/   BullMQ; processor per queue in src/jobs/, wired in src/runtime.ts. src/ingest/: PDF →
   test (pdf, textParser, keyParser, aiExtractor (Gemini, AiClient interface), sections, pipeline)
   test/fixtures: sample SBI/SSC/JEE PDFs + keys + scan (`pnpm --filter @mockprep/worker fixtures`)
-packages/core  @mockprep/core (api + worker, not released): Mongoose models (…, upload), db,
-  crypto, storage (local | s3, get()), questionHash, flags (contentFlags), toTemplateSnapshot
+packages/core  @mockprep/core (api + worker, not released): Mongoose models (…, upload, attempt),
+  db, crypto, storage, questionHash, flags, toTemplateSnapshot, scoring, attemptStore (Redis)
 packages/types @mockprep/types: shared Zod schemas + types (released, see §2)
 packages/config shared tsconfig / eslint / prettier
 docker-compose.yml (Mongo 7 + Redis) · render.yaml (FREE: one web service, worker embedded)
 render.paid.yaml (paid: api + separate worker; rename to render.yaml for the commercial launch)
 ```
 
-Infra now (free): Render free web, Atlas M0, Redis Cloud free, Cloudflare R2 (S3 driver +
-`S3_ENDPOINT`), email codes via Brevo (`services/email.ts`, EmailSender) + Google sign-in. Paid later: Render paid + worker, Atlas M10+, S3/R2, MSG91.
+Infra now (free): Render free web, Atlas M0, Redis Cloud free, R2 (`S3_ENDPOINT`), Brevo email
+codes + Google sign-in. Paid later: Render paid + worker, Atlas M10+, MSG91.
 Free switches: `RUN_WORKER_IN_API` (api starts `@mockprep/worker/runtime` in-process),
 `SEED_ON_START` (seed at boot, no pre-deploy step). New queues go in apps/worker/src/runtime.ts.
 External providers (OTP, storage, AI, payments, email, WhatsApp, push) always sit behind an
@@ -127,6 +128,10 @@ add to that app's `env.ts` schema + `.env.example` + `render.yaml` + README tabl
   recompute flags of uploaded questions, approve clears them. Re-runs replace an upload's output.
 - Files via core `storage.ts` (local driver: signed PUT `/api/storage/local/*`, served at
   `/api/files/*`; s3 driver: presigned PUT). Production must use s3 (Render disk is ephemeral).
+- Attempts: live state in Redis hash `attempt:{id}` (meta + `a:{questionId}`), never Mongo on
+  the save path; latest client `at` wins; worker flushes dirty ids every 30 s and auto-submits
+  overdue attempts; saves refused after deadline + 10 s; locked sections advance on the server
+  clock. Scoring (core `scoring.ts`) runs in the worker `score` queue; answers never in papers.
 
 **Exam templates**
 
@@ -175,24 +180,20 @@ Build order; each phase ends deployable and clickable. Start each in a fresh ses
 | 2   | Auth + exam catalogue + exam templates    | done   |
 | 3   | Question bank + test builder              | done   |
 | 4   | PDF → test pipeline                       | done   |
-| 5   | Test engine                               |        |
+| 5   | Test engine                               | done   |
 | 6   | Results + analysis                        |        |
 | 7   | Payments                                  |        |
 | 8   | Live tests + notifications                |        |
 | 9   | More exams + hardening + launch           |        |
 
-**Current phase: 4 (complete) — next: Phase 5.**
+**Current phase: 5 (complete) — next: Phase 6.**
 
 ## 9. Change log
 
-- Phase 0–1: CLAUDE.md, two monorepos; /health, worker ping, types release tarball, CI, render.yaml.
-- Phase 2: phone OTP + Google + admin argon2/forced TOTP; rotating per-device sessions; roles;
-  catalogue + admin CRUD; audit logs; seed; Redis rate limits. Deps: jose, argon2, qrcode.
-- Phase 3: versioned question bank, Excel/CSV import (exceljs), figure storage (local + S3
-  presign), tests with templateSnapshot, rule fill, publish gate, student-paper preview; types 0.3.
-- Free tier: embeddable worker runtime, seed-on-start, R2, render.yaml free / render.paid.yaml;
-  email OTP login via Brevo; types 0.4.0.
-- Phase 4: PDF → draft test. `@mockprep/core` shared by api + worker. Worker `ingest`: Gemini
-  (pdf-lib chunks, JSON schema, backoff) or unpdf text parser, key parser, flags, sections.
-  Api: uploads, approve, approve-answered, publish `{force}`. Env GEMINI_API_KEY/GEMINI_MODEL/
-  CHUNK_PAGES (worker + MONGODB_URI, storage). Deps: unpdf, pdf-lib, @google/genai; types 0.5.0.
+- Phase 0–3: monorepos, /health, types release, CI; phone OTP + Google + admin argon2/TOTP,
+  sessions, roles, catalogue, audit; versioned question bank, import, figures, test builder.
+- Free tier: embedded worker, seed-on-start, R2, Brevo email login; types 0.4.0.
+- Phase 4: `@mockprep/core`; worker `ingest` (Gemini chunks or unpdf text parser, key parser,
+  flags, sections); uploads + review api. Deps: unpdf, pdf-lib, @google/genai; types 0.5.0.
+- Phase 5: attempts api, Redis attempt store + 30 s flush/auto-submit, `score` queue, public test
+  details; k6: 1,000 students p95 93 ms; types 0.6.1 (attempts, multiPartial).

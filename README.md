@@ -283,6 +283,30 @@ Local check without a key: upload `apps/worker/test/fixtures/sbi-paper.pdf` with
 for SBI PO. You get 12 questions, 11 auto-approved, and Q8 flagged "Needs figure". The fixtures
 are regenerated with `pnpm --filter @mockprep/worker fixtures`.
 
+## Test engine (attempts)
+
+| Endpoint (student token)                   | What it does                                                            |
+| ------------------------------------------ | ----------------------------------------------------------------------- |
+| `GET /api/tests/:id` (public)              | Pattern for the instruction screen (no questions)                       |
+| `POST /api/attempts {testId}`              | Starts the clock, or resumes the attempt in progress. Returns the paper |
+| `GET /api/attempts/:id`                    | Resume: server clock, saved answers, paper                              |
+| `PATCH /api/attempts/:id/answers`          | Batched saves `[{questionId, response, state, timeMs, at}]`             |
+| `POST /api/attempts/:id/next-section`      | Ends a locked section early                                             |
+| `POST /api/attempts/:id/submit`            | Submits (with the last unsynced answers) and queues scoring             |
+| `GET /api/attempts/:id/result`, `?testId=` | Result once scored; the student's own attempts                          |
+
+- **The paper** is built once per test version and cached in Redis. It never contains answers or
+  solutions.
+- **Saves go to Redis only** (`attempt:{id}` hash). The latest change (client timestamp `at`)
+  wins, so a phone's offline queue can't overwrite newer answers. Saves are refused 10 s after
+  the deadline, and for locked sections (unless the answer was made before the section ended).
+- **The worker** flushes changed attempts to MongoDB every 30 s, auto-submits attempts whose time
+  ran out (students who closed the tab), and scores submitted attempts (`score` queue): exact
+  match per type, numeric within `[min, max]`, negative marking, optional partial marking for
+  multi-correct (`multiPartial` on the template).
+- **Load test:** `loadtest/` has a k6 script. 1,000 students saving every 5 s gave p95 93 ms
+  with 0 errors locally (target < 300 ms). See `loadtest/README.md`.
+
 ## CI
 
 `.github/workflows/ci.yml` runs on every PR and every push: install, typecheck, lint, test,

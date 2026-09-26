@@ -330,6 +330,16 @@ describe("attempts", () => {
     expect(doc).toMatchObject({ status: "submitted", submitReason: "timeout" });
     expect(doc?.answers).toHaveLength(2);
     expect(doc?.submittedAt?.getTime()).toBe(t0 + 120_000);
+
+    // The screen's own submit at zero is recorded as a timeout too.
+    const second = await start(app, test.id as string);
+    vi.setSystemTime(new Date(second.attempt.deadline).getTime() + 1000);
+    await request(app)
+      .post(`/api/attempts/${second.attempt.id}/submit`)
+      .set(auth)
+      .send({})
+      .expect(200);
+    expect((await AttemptModel.findById(second.attempt.id).lean())?.submitReason).toBe("timeout");
   });
 });
 
