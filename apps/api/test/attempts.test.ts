@@ -332,7 +332,7 @@ describe("attempts", () => {
     expect(doc?.submittedAt?.getTime()).toBe(t0 + 120_000);
 
     // The screen's own submit at zero is recorded as a timeout too.
-    const second = await start(app, test.id as string);
+    const second = await start(app, test.id);
     vi.setSystemTime(new Date(second.attempt.deadline).getTime() + 1000);
     await request(app)
       .post(`/api/attempts/${second.attempt.id}/submit`)
