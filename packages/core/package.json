@@ -1,0 +1,40 @@
+{
+  "name": "@mockprep/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Server-side domain core shared by the api and the worker: Mongoose models, db connection, file storage, hashing.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1141.0",
+    "@aws-sdk/s3-request-presigner": "^3.1141.0",
+    "@mockprep/types": "workspace:*"
+  },
+  "peerDependencies": {
+    "mongoose": "^9.10.2",
+    "pino": "^10.3.1"
+  },
+  "devDependencies": {
+    "@mockprep/config": "workspace:*",
+    "@types/node": "^22.19.0",
+    "eslint": "^9.39.5",
+    "mongoose": "^9.10.2",
+    "pino": "^10.3.1",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.2"
+  }
+}

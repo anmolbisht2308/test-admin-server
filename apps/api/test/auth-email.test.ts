@@ -1,7 +1,7 @@
 import request from "supertest";
 import { describe, expect, it, vi } from "vitest";
 import { parseEnv } from "../src/env.js";
-import { UserModel } from "../src/models/user.js";
+import { UserModel } from "@mockprep/core";
 import { BrevoEmailSender, otpEmail } from "../src/services/email.js";
 import { RecordingEmailSender, buildTestApp, cookieFrom, useTestDatabase } from "./helpers.js";
 

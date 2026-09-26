@@ -8,9 +8,9 @@ import { Router } from "express";
 import { toExamDto, toTemplateDto } from "../lib/dto.js";
 import { notFoundError } from "../lib/httpError.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
-import { ExamModel } from "../models/exam.js";
-import { ExamTemplateModel } from "../models/examTemplate.js";
-import { TestModel } from "../models/test.js";
+import { ExamModel } from "@mockprep/core";
+import { ExamTemplateModel } from "@mockprep/core";
+import { TestModel } from "@mockprep/core";
 
 // Public catalogue changes rarely; short cache keeps admin edits visible within a minute.
 const CACHE = "public, max-age=60, s-maxage=60, stale-while-revalidate=300";

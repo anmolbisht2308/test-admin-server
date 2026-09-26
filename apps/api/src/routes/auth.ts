@@ -9,7 +9,7 @@ import { Router } from "express";
 import type { AppContext } from "../context.js";
 import { HttpError } from "../lib/httpError.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
-import { UserModel } from "../models/user.js";
+import { UserModel } from "@mockprep/core";
 import { endSession, refreshSession, startSession } from "./sessionResponse.js";
 
 /** Student auth: phone OTP, email OTP and Google. Mounted at /api/auth. */

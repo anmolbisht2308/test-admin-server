@@ -5,11 +5,11 @@ import {
   examListResponseSchema,
   examTemplateInputSchema,
 } from "@mockprep/types";
-import { AuditLogModel } from "../src/models/auditLog.js";
+import { AuditLogModel } from "@mockprep/core";
 import { SEED_EXAMS, SEED_TEMPLATES } from "../src/scripts/seed-data.js";
 import { seedAdmin, seedCatalogue } from "../src/scripts/seedCatalogue.js";
-import { UserModel } from "../src/models/user.js";
-import { ExamTemplateModel } from "../src/models/examTemplate.js";
+import { UserModel } from "@mockprep/core";
+import { ExamTemplateModel } from "@mockprep/core";
 import { accessTokenFor, buildTestApp, silentLogger, useTestDatabase } from "./helpers.js";
 
 useTestDatabase();

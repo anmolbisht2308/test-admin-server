@@ -1,6 +1,6 @@
 import { randomInt } from "node:crypto";
 import type { Redis } from "ioredis";
-import { hmacSha256, safeEqualHex } from "../lib/crypto.js";
+import { hmacSha256, safeEqualHex } from "@mockprep/core";
 import { HttpError } from "../lib/httpError.js";
 import { otpEmail, type EmailSender } from "./email.js";
 import type { OtpSender } from "./otpSender.js";

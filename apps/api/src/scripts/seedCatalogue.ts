@@ -1,9 +1,9 @@
 import { adminPasswordSchema, examInputSchema, examTemplateInputSchema } from "@mockprep/types";
 import argon2 from "argon2";
 import type { Logger } from "pino";
-import { ExamModel } from "../models/exam.js";
-import { ExamTemplateModel } from "../models/examTemplate.js";
-import { UserModel } from "../models/user.js";
+import { ExamModel } from "@mockprep/core";
+import { ExamTemplateModel } from "@mockprep/core";
+import { UserModel } from "@mockprep/core";
 import { SEED_EXAMS, SEED_TEMPLATES } from "./seed-data.js";
 
 /** Inserts missing templates/exams. Never overwrites edits made in the admin panel. */

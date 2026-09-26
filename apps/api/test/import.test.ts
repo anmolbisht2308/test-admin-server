@@ -1,7 +1,7 @@
 import ExcelJS from "exceljs";
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { QuestionModel } from "../src/models/question.js";
+import { QuestionModel } from "@mockprep/core";
 import {
   IMPORT_COLUMNS,
   XLSX_TYPE,

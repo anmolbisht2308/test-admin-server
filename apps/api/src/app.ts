@@ -21,7 +21,7 @@ import { createOtpService } from "./services/otp.js";
 import { createOtpSender, type OtpSender } from "./services/otpSender.js";
 import { RedisRateLimitStore } from "./services/rateLimit.js";
 import { createSessionService } from "./services/sessions.js";
-import { LocalStorage, createStorage, type Storage } from "./services/storage.js";
+import { LocalStorage, createStorage, type Storage } from "@mockprep/core";
 import { localStorageRouter } from "./routes/storage.js";
 
 export interface AppDeps {

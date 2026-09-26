@@ -5,8 +5,8 @@ import { toSeriesDto } from "../../lib/dto.js";
 import { HttpError, notFoundError } from "../../lib/httpError.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { getAuth, requireRole } from "../../middleware/auth.js";
-import { SeriesModel } from "../../models/series.js";
-import { TestModel } from "../../models/test.js";
+import { SeriesModel } from "@mockprep/core";
+import { TestModel } from "@mockprep/core";
 import { recordAudit } from "../../services/audit.js";
 import { CONTENT_WRITERS, parseId } from "./common.js";
 

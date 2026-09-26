@@ -9,8 +9,8 @@ import {
 } from "../lib/cookies.js";
 import { toUserDto } from "../lib/dto.js";
 import { HttpError } from "../lib/httpError.js";
-import type { UserDoc } from "../models/user.js";
-import { UserModel } from "../models/user.js";
+import type { UserDoc } from "@mockprep/core";
+import { UserModel } from "@mockprep/core";
 import type { IssuedSession } from "../services/sessions.js";
 
 async function respond(

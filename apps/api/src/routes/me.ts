@@ -5,8 +5,8 @@ import { toUserDto } from "../lib/dto.js";
 import { HttpError } from "../lib/httpError.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
 import { getAuth, requireAuth, requireRole } from "../middleware/auth.js";
-import { ExamModel } from "../models/exam.js";
-import { UserModel } from "../models/user.js";
+import { ExamModel } from "@mockprep/core";
+import { UserModel } from "@mockprep/core";
 
 /** Current user. Mounted at /api/me. */
 export function meRouter(ctx: AppContext): Router {

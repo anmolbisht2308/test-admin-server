@@ -1,7 +1,9 @@
 import type { CookieOptions, Request, Response } from "express";
 import type { Env } from "../env.js";
 
-export type SessionKind = "student" | "admin";
+import type { SessionKind } from "@mockprep/core";
+
+export type { SessionKind };
 
 /**
  * Refresh-token cookies. Web and admin reach the api through their own Next.js rewrite

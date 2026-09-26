@@ -5,7 +5,7 @@
  */
 import mongoose from "mongoose";
 import { z } from "zod";
-import { connectMongo } from "../db.js";
+import { connectMongo } from "@mockprep/core";
 import { createLogger } from "../logger.js";
 import { SEED_EXAMS, SEED_TEMPLATES } from "./seed-data.js";
 import { seedAdmin, seedCatalogue } from "./seedCatalogue.js";

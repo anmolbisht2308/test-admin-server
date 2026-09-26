@@ -1,7 +1,7 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { totpCode, TOTP_STEP_SEC } from "../src/lib/totp.js";
-import { UserModel } from "../src/models/user.js";
+import { UserModel } from "@mockprep/core";
 import {
   ADMIN_PASSWORD,
   buildTestApp,

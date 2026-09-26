@@ -3,8 +3,8 @@ import express, { Router } from "express";
 import { HttpError } from "../lib/httpError.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
 import { requireRole } from "../middleware/auth.js";
-import type { LocalStorage } from "../services/storage.js";
-import { newFigureKey, type Storage } from "../services/storage.js";
+import type { LocalStorage } from "@mockprep/core";
+import { newFigureKey, type Storage } from "@mockprep/core";
 import { CONTENT_WRITERS } from "./admin/common.js";
 
 /** POST /api/admin/figures/presign — mounted inside the admin guard. */

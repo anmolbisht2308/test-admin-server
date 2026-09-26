@@ -1,9 +1,9 @@
 import request from "supertest";
 import { describe, expect, it } from "vitest";
 import { ROTATION_GRACE_MS } from "../src/services/sessions.js";
-import { SessionModel } from "../src/models/session.js";
-import { UserModel } from "../src/models/user.js";
-import { ExamModel } from "../src/models/exam.js";
+import { SessionModel } from "@mockprep/core";
+import { UserModel } from "@mockprep/core";
+import { ExamModel } from "@mockprep/core";
 import {
   RecordingOtpSender,
   buildTestApp,

@@ -1,16 +1,13 @@
-import { createHash } from "node:crypto";
-import { normaliseForHash, type ExamFamily, type QuestionData } from "@mockprep/types";
+import { questionHash } from "@mockprep/core";
+import type { ExamFamily, QuestionData } from "@mockprep/types";
 import { Types } from "mongoose";
 import { toQuestionDto } from "../lib/dto.js";
 import { HttpError, conflictError, notFoundError } from "../lib/httpError.js";
-import { ExamModel } from "../models/exam.js";
-import { QuestionModel, type QuestionAttrs } from "../models/question.js";
-import { TestModel } from "../models/test.js";
+import { ExamModel } from "@mockprep/core";
+import { QuestionModel, type QuestionAttrs } from "@mockprep/core";
+import { TestModel } from "@mockprep/core";
 
-export const questionHash = (q: Pick<QuestionData, "stem" | "stemHi" | "options" | "optionsHi">) =>
-  createHash("sha1")
-    .update(normaliseForHash(q.stem || q.stemHi, q.options.length ? q.options : q.optionsHi))
-    .digest("hex");
+export { questionHash };
 
 /** Fields students see. Changing any of them on a question in a published test makes a new version. */
 const CONTENT_FIELDS = [

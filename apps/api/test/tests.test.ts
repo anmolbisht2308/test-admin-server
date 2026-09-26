@@ -1,8 +1,8 @@
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 import { publicTestListResponseSchema, studentPaperSchema } from "@mockprep/types";
-import { ExamTemplateModel } from "../src/models/examTemplate.js";
-import { TestModel } from "../src/models/test.js";
+import { ExamTemplateModel } from "@mockprep/core";
+import { TestModel } from "@mockprep/core";
 import { splitByMix } from "../src/services/testBuilder.js";
 import { makeQuestion, makeQuestions, seed } from "./factories.js";
 import { accessTokenFor, buildTestApp, useTestDatabase } from "./helpers.js";

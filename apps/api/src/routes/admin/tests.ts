@@ -14,10 +14,10 @@ import { HttpError, conflictError, notFoundError } from "../../lib/httpError.js"
 import { toStudentPaper } from "../../lib/studentPaper.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { getAuth, requireRole } from "../../middleware/auth.js";
-import { ExamModel } from "../../models/exam.js";
-import { ExamTemplateModel } from "../../models/examTemplate.js";
-import { QuestionModel } from "../../models/question.js";
-import { TestModel, type TestAttrs } from "../../models/test.js";
+import { ExamModel } from "@mockprep/core";
+import { ExamTemplateModel } from "@mockprep/core";
+import { QuestionModel } from "@mockprep/core";
+import { TestModel, type TestAttrs } from "@mockprep/core";
 import { recordAudit } from "../../services/audit.js";
 import {
   allQuestionIds,

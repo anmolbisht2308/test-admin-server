@@ -1,7 +1,7 @@
 import type { WorkerRuntime } from "@mockprep/worker/runtime";
 import mongoose from "mongoose";
 import { createApp } from "./app.js";
-import { connectMongo, isMongoUp } from "./db.js";
+import { connectMongo, isMongoUp } from "@mockprep/core";
 import { loadEnv } from "./env.js";
 import { createLogger } from "./logger.js";
 import { createRedis, pingRedis } from "./redis.js";

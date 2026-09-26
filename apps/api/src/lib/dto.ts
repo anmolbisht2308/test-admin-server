@@ -8,13 +8,13 @@ import type {
   User,
 } from "@mockprep/types";
 import type { Types } from "mongoose";
-import type { ExamAttrs } from "../models/exam.js";
-import type { ExamTemplateAttrs } from "../models/examTemplate.js";
-import type { QuestionAttrs } from "../models/question.js";
-import type { SeriesAttrs } from "../models/series.js";
-import type { TaxonomyAttrs } from "../models/taxonomy.js";
-import type { TestAttrs } from "../models/test.js";
-import type { UserAttrs } from "../models/user.js";
+import type { ExamAttrs } from "@mockprep/core";
+import type { ExamTemplateAttrs } from "@mockprep/core";
+import type { QuestionAttrs } from "@mockprep/core";
+import type { SeriesAttrs } from "@mockprep/core";
+import type { TaxonomyAttrs } from "@mockprep/core";
+import type { TestAttrs } from "@mockprep/core";
+import type { UserAttrs } from "@mockprep/core";
 
 type WithId<T> = T & { _id: Types.ObjectId };
 

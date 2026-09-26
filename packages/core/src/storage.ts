@@ -1,35 +1,57 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
-import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { FigurePresignResponse } from "@mockprep/types";
-import type { Env } from "../env.js";
-import { hmacSha256, safeEqualHex } from "../lib/crypto.js";
+import { hmacSha256, safeEqualHex } from "./crypto.js";
+
+/** The env fields storage needs (the api/worker Env objects satisfy this). */
+export interface StorageConfig {
+  STORAGE_DRIVER: "local" | "s3";
+  LOCAL_UPLOAD_DIR: string;
+  JWT_SECRET: string;
+  S3_BUCKET?: string | undefined;
+  S3_REGION?: string | undefined;
+  S3_PUBLIC_BASE_URL?: string | undefined;
+  S3_ENDPOINT?: string | undefined;
+}
 
 const EXTENSIONS: Record<string, string> = {
   "image/png": "png",
   "image/jpeg": "jpg",
   "image/webp": "webp",
   "image/gif": "gif",
+  "application/pdf": "pdf",
 };
 const PRESIGN_TTL_SEC = 600;
 
 /** Object keys we generate; the local driver only accepts these (no path traversal). */
-export const FIGURE_KEY_RE = /^figures\/\d{4}\/\d{2}\/[0-9a-f-]{36}\.(png|jpg|webp|gif)$/;
+export const STORAGE_KEY_RE =
+  /^(figures|uploads)\/\d{4}\/\d{2}\/[0-9a-f-]{36}\.(png|jpg|webp|gif|pdf)$/;
 
-export function newFigureKey(contentType: string, now = new Date()): string {
+/** figures/: question images. uploads/: question papers, keys and solutions (PDF or image). */
+export function newStorageKey(
+  prefix: "figures" | "uploads",
+  contentType: string,
+  now = new Date(),
+): string {
   const ext = EXTENSIONS[contentType];
   if (!ext) throw new Error(`unsupported content type ${contentType}`);
   const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  return `figures/${now.getUTCFullYear()}/${month}/${randomUUID()}.${ext}`;
+  return `${prefix}/${now.getUTCFullYear()}/${month}/${randomUUID()}.${ext}`;
 }
+
+export const newFigureKey = (contentType: string, now = new Date()) =>
+  newStorageKey("figures", contentType, now);
 
 /** Upload target for browser uploads (presigned) and server-side writes (Phase 4 figures). */
 export interface Storage {
   readonly driver: "local" | "s3";
   presignUpload(key: string, contentType: string, size: number): Promise<FigurePresignResponse>;
   put(key: string, body: Buffer, contentType: string): Promise<string>;
+  /** Reads a stored object (the worker reads uploaded papers with this). */
+  get(key: string): Promise<Buffer>;
 }
 
 /** Dev driver: files on disk, uploads go to a token-checked api route, served at /api/files/*. */
@@ -67,7 +89,7 @@ export class LocalStorage implements Storage {
     contentType: string | undefined,
     bytes: number,
   ): string | null {
-    if (!FIGURE_KEY_RE.test(key)) return "invalid key";
+    if (!STORAGE_KEY_RE.test(key)) return "invalid key";
     const { ct, size, exp, sig } = query;
     if (
       typeof ct !== "string" ||
@@ -84,12 +106,21 @@ export class LocalStorage implements Storage {
     return null;
   }
 
-  async put(key: string, body: Buffer) {
+  private resolve(key: string) {
     const target = path.resolve(this.dir, key);
     if (!target.startsWith(path.resolve(this.dir) + path.sep)) throw new Error("invalid key");
+    return target;
+  }
+
+  async put(key: string, body: Buffer) {
+    const target = this.resolve(key);
     await mkdir(path.dirname(target), { recursive: true });
     await writeFile(target, body);
     return `/api/files/${key}`;
+  }
+
+  get(key: string) {
+    return readFile(this.resolve(key));
   }
 }
 
@@ -144,9 +175,15 @@ export class S3Storage implements Storage {
     );
     return `${this.publicBaseUrl.replace(/\/$/, "")}/${key}`;
   }
+
+  async get(key: string) {
+    const res = await this.client.send(new GetObjectCommand({ Bucket: this.bucket, Key: key }));
+    if (!res.Body) throw new Error(`empty object ${key}`);
+    return Buffer.from(await res.Body.transformToByteArray());
+  }
 }
 
-export function createStorage(env: Env): Storage {
+export function createStorage(env: StorageConfig): Storage {
   if (env.STORAGE_DRIVER === "s3" && env.S3_BUCKET && env.S3_REGION && env.S3_PUBLIC_BASE_URL) {
     return new S3Storage(env.S3_BUCKET, env.S3_REGION, env.S3_PUBLIC_BASE_URL, env.S3_ENDPOINT);
   }

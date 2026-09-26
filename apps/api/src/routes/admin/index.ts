@@ -3,7 +3,7 @@ import { Router } from "express";
 import type { AppContext } from "../../context.js";
 import { requireAuth, requireRole } from "../../middleware/auth.js";
 import { adminAuthRouter } from "../adminAuth.js";
-import type { Storage } from "../../services/storage.js";
+import type { Storage } from "@mockprep/core";
 import { adminFiguresRouter } from "../storage.js";
 import { adminExamsRouter } from "./exams.js";
 import { adminQuestionImportRouter } from "./questionImport.js";

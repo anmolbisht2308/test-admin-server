@@ -8,9 +8,9 @@ import {
 } from "@mockprep/types";
 import { Types, type QueryFilter } from "mongoose";
 import type { z } from "zod";
-import { QuestionModel, type QuestionAttrs } from "../models/question.js";
-import { TaxonomyModel } from "../models/taxonomy.js";
-import { TestModel, type TestAttrs } from "../models/test.js";
+import { QuestionModel, type QuestionAttrs } from "@mockprep/core";
+import { TaxonomyModel } from "@mockprep/core";
+import { TestModel, type TestAttrs } from "@mockprep/core";
 
 type QuestionDoc = QuestionAttrs & { _id: Types.ObjectId };
 type Rule = z.output<typeof selectionRuleSchema>;

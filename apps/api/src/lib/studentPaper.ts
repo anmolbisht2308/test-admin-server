@@ -1,7 +1,7 @@
 import type { StudentPaper, StudentQuestion } from "@mockprep/types";
 import type { Types } from "mongoose";
-import type { QuestionAttrs } from "../models/question.js";
-import type { TestAttrs } from "../models/test.js";
+import type { QuestionAttrs } from "@mockprep/core";
+import type { TestAttrs } from "@mockprep/core";
 
 /**
  * THE serializer for anything a student sees before submitting. It copies fields explicitly

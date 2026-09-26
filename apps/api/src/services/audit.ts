@@ -1,5 +1,5 @@
 import { Types } from "mongoose";
-import { AuditLogModel, type AuditAction } from "../models/auditLog.js";
+import { AuditLogModel, type AuditAction } from "@mockprep/core";
 
 const IGNORED = new Set(["_id", "id", "__v", "createdAt", "updatedAt"]);
 

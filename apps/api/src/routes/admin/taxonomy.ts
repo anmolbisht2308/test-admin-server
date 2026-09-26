@@ -11,7 +11,7 @@ import { toTaxonomyDto } from "../../lib/dto.js";
 import { HttpError, conflictError, notFoundError } from "../../lib/httpError.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { getAuth, requireRole } from "../../middleware/auth.js";
-import { TaxonomyModel } from "../../models/taxonomy.js";
+import { TaxonomyModel } from "@mockprep/core";
 import { recordAudit } from "../../services/audit.js";
 import { CONTENT_WRITERS, parseId } from "./common.js";
 

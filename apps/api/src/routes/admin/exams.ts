@@ -4,8 +4,8 @@ import { toExamDto } from "../../lib/dto.js";
 import { HttpError, notFoundError } from "../../lib/httpError.js";
 import { asyncHandler } from "../../middleware/asyncHandler.js";
 import { getAuth, requireRole } from "../../middleware/auth.js";
-import { ExamModel } from "../../models/exam.js";
-import { ExamTemplateModel } from "../../models/examTemplate.js";
+import { ExamModel } from "@mockprep/core";
+import { ExamTemplateModel } from "@mockprep/core";
 import { recordAudit } from "../../services/audit.js";
 import { CONTENT_WRITERS, parseId } from "./common.js";
 

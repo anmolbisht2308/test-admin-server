@@ -1,9 +1,9 @@
 import type { Request } from "express";
 import type { Types } from "mongoose";
-import { randomToken, sha256 } from "../lib/crypto.js";
+import { randomToken, sha256 } from "@mockprep/core";
 import type { SessionKind } from "../lib/cookies.js";
 import { HttpError } from "../lib/httpError.js";
-import { SessionModel } from "../models/session.js";
+import { SessionModel } from "@mockprep/core";
 
 /** A rotated-out token still works this long, so a lost response or a racing tab is not a logout. */
 export const ROTATION_GRACE_MS = 20_000;

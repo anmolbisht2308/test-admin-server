@@ -7,11 +7,11 @@ import argon2 from "argon2";
 import { Router } from "express";
 import QRCode from "qrcode";
 import type { AppContext } from "../context.js";
-import { decrypt, encrypt } from "../lib/crypto.js";
+import { decrypt, encrypt } from "@mockprep/core";
 import { HttpError } from "../lib/httpError.js";
 import { generateTotpSecret, otpauthUrl, verifyTotp } from "../lib/totp.js";
 import { asyncHandler } from "../middleware/asyncHandler.js";
-import { UserModel } from "../models/user.js";
+import { UserModel } from "@mockprep/core";
 import { enforceLimit } from "../services/rateLimit.js";
 import { endSession, refreshSession, startSession } from "./sessionResponse.js";
 

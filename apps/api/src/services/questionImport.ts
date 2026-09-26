@@ -11,8 +11,8 @@ import {
 import ExcelJS from "exceljs";
 import { Types } from "mongoose";
 import { HttpError } from "../lib/httpError.js";
-import { ExamModel } from "../models/exam.js";
-import { QuestionModel } from "../models/question.js";
+import { ExamModel } from "@mockprep/core";
+import { QuestionModel } from "@mockprep/core";
 import { questionHash } from "./questions.js";
 
 export const MAX_IMPORT_ROWS = 2000;

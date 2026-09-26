@@ -1,6 +1,6 @@
 import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
-import { AuditLogModel } from "../src/models/auditLog.js";
+import { AuditLogModel } from "@mockprep/core";
 import { accessTokenFor, buildTestApp, useTestDatabase } from "./helpers.js";
 
 useTestDatabase();

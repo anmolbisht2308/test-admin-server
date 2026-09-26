@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { LocalStorage, S3Storage, newFigureKey } from "../src/services/storage.js";
+import { LocalStorage, S3Storage, newFigureKey } from "@mockprep/core";
 import { accessTokenFor, buildTestApp, useTestDatabase } from "./helpers.js";
 
 useTestDatabase();

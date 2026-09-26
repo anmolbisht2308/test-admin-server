@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decrypt, encrypt } from "../src/lib/crypto.js";
+import { decrypt, encrypt } from "@mockprep/core";
 import { base32Decode, base32Encode, hotp, verifyTotp, totpCode } from "../src/lib/totp.js";
 
 // RFC 4226 / 6238 test secret "12345678901234567890".

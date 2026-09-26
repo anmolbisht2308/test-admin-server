@@ -1,5 +1,6 @@
 import { Schema, model, type Types } from "mongoose";
-import type { SessionKind } from "../lib/cookies.js";
+
+export type SessionKind = "student" | "admin";
 
 /** One document per signed-in device. Refresh tokens are stored only as sha256 hashes. */
 export interface SessionAttrs {

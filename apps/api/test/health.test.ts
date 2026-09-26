@@ -1,7 +1,7 @@
 import { healthResponseSchema } from "@mockprep/types";
 import request from "supertest";
 import { describe, expect, it } from "vitest";
-import { isMongoUp } from "../src/db.js";
+import { isMongoUp } from "@mockprep/core";
 import { buildTestApp, useTestDatabase } from "./helpers.js";
 
 describe("GET /health", () => {
