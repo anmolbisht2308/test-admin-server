@@ -48,6 +48,13 @@ export function localStorageRouter(storage: LocalStorage): Router {
       immutable: true,
       maxAge: "365d",
       fallthrough: true,
+      // Uploaded papers are shown in the admin review screen's iframe. The api-wide CSP
+      // (object-src 'none', script-src 'self') can stop the browser's PDF viewer, so PDFs only
+      // keep the framing rule.
+      setHeaders: (res, filePath) => {
+        if (filePath.endsWith(".pdf"))
+          res.setHeader("Content-Security-Policy", "frame-ancestors 'self'");
+      },
     }),
   );
   return router;

@@ -41,13 +41,16 @@ bump `packages/types` version → merge (release is automatic) → update the UR
 ```
 apps/api/src/  Express 5 + Mongoose. env.ts (Zod, fail fast) · app.ts createApp(deps) · server.ts
   context.ts (AppContext for route factories) · middleware/ (asyncHandler, errorHandler, auth)
-  lib/ (httpError, tokens, crypto, totp, cookies, dto mappers, studentPaper serializer)
-  models/ (user, session, exam, examTemplate, taxonomy, auditLog, question, test, series)
-  services/ (otp, sessions, google, rateLimit, audit, questions (hash/versioning),
-    questionImport (exceljs), testBuilder (checks + rule fill), storage (local | s3))
-  routes/ (auth, adminAuth, me, catalogue, storage, admin/*) · scripts/ (seed)
+  lib/ (httpError, tokens, totp, cookies, dto mappers, studentPaper serializer)
+  services/ (otp, sessions, google, rateLimit, audit, questions (versioning, approve),
+    questionImport (exceljs), testBuilder (checks + rule fill), ingestQueue)
+  routes/ (auth, adminAuth, me, catalogue, storage, admin/* incl. uploads) · scripts/ (seed)
 apps/api/test/ supertest vs createApp; helpers.ts (db, logins), factories.ts (seed, makeQuestion)
-apps/worker/   BullMQ; one processor factory per queue in src/jobs/, wired in src/index.ts
+apps/worker/   BullMQ; processor per queue in src/jobs/, wired in src/runtime.ts. src/ingest/: PDF →
+  test (pdf, textParser, keyParser, aiExtractor (Gemini, AiClient interface), sections, pipeline)
+  test/fixtures: sample SBI/SSC/JEE PDFs + keys + scan (`pnpm --filter @mockprep/worker fixtures`)
+packages/core  @mockprep/core (api + worker, not released): Mongoose models (…, upload), db,
+  crypto, storage (local | s3, get()), questionHash, flags (contentFlags), toTemplateSnapshot
 packages/types @mockprep/types: shared Zod schemas + types (released, see §2)
 packages/config shared tsconfig / eslint / prettier
 docker-compose.yml (Mongo 7 + Redis) · render.yaml (FREE: one web service, worker embedded)
@@ -120,7 +123,9 @@ add to that app's `env.ts` schema + `.env.example` + `render.yaml` + README tabl
   question in a published test creates a new version (published tests keep the old id, drafts are
   repointed); tag-only edits stay in place. Bank/listing/builder use `isLatest: true` only.
 - `hash` = sha1(normaliseForHash(stem, options)) for duplicates; "duplicate" flag on clash.
-- Figures via `services/storage.ts` (local driver: signed PUT `/api/storage/local/*`, served at
+- PDF uploads: flags from core `contentFlags` (+ duplicate flags); unflagged → approved. Edits
+  recompute flags of uploaded questions, approve clears them. Re-runs replace an upload's output.
+- Files via core `storage.ts` (local driver: signed PUT `/api/storage/local/*`, served at
   `/api/files/*`; s3 driver: presigned PUT). Production must use s3 (Render disk is ephemeral).
 
 **Exam templates**
@@ -169,28 +174,25 @@ Build order; each phase ends deployable and clickable. Start each in a fresh ses
 | 1   | Setup: monorepos, CI/CD, deploys, /health | done   |
 | 2   | Auth + exam catalogue + exam templates    | done   |
 | 3   | Question bank + test builder              | done   |
-| 4   | PDF → test pipeline                       |        |
+| 4   | PDF → test pipeline                       | done   |
 | 5   | Test engine                               |        |
 | 6   | Results + analysis                        |        |
 | 7   | Payments                                  |        |
 | 8   | Live tests + notifications                |        |
 | 9   | More exams + hardening + launch           |        |
 
-**Current phase: 3 (complete) — next: Phase 4.**
+**Current phase: 4 (complete) — next: Phase 5.**
 
 ## 9. Change log
 
-- Phase 0: CLAUDE.md; two monorepos, `@mockprep` scope, types owned + released here.
-- Phase 1: api /health (200 ok / 503 degraded), worker ping, types as GitHub Release tarball, CI,
-  render.yaml (Singapore), docker-compose.
-- Phase 2: phone OTP (console/MSG91) + Google (jose JWKS) + admin argon2 & forced TOTP; rotating
-  per-device sessions (2 student devices); roles; catalogue + admin CRUD; audit logs; seed; Redis
-  rate limits. Deps: jose, argon2, cookie-parser, qrcode.
-- Phase 3: versioned question bank (search, filters, bulk, duplicates), Excel/CSV import (exceljs),
-  figure storage (local + S3 presign; @aws-sdk/client-s3 + s3-request-presigner), tests with
-  frozen templateSnapshot, rule fill (mix, topics, taxonomy, not-used-in-N-days), live checks +
-  publish gate, student-paper preview, series API (UI later), public test cards; types 0.3.0.
-- Free tier: worker runtime extracted (`@mockprep/worker/runtime`) and embeddable in the api,
-  seed-on-start, R2 via `S3_ENDPOINT` (checksums only when required), render.yaml free /
-  render.paid.yaml paid. Email OTP login (`/api/auth/email/*`, Brevo/console EmailSender, same
-  limits as SMS, same account as Google by email); types 0.4.0.
+- Phase 0–1: CLAUDE.md, two monorepos; /health, worker ping, types release tarball, CI, render.yaml.
+- Phase 2: phone OTP + Google + admin argon2/forced TOTP; rotating per-device sessions; roles;
+  catalogue + admin CRUD; audit logs; seed; Redis rate limits. Deps: jose, argon2, qrcode.
+- Phase 3: versioned question bank, Excel/CSV import (exceljs), figure storage (local + S3
+  presign), tests with templateSnapshot, rule fill, publish gate, student-paper preview; types 0.3.
+- Free tier: embeddable worker runtime, seed-on-start, R2, render.yaml free / render.paid.yaml;
+  email OTP login via Brevo; types 0.4.0.
+- Phase 4: PDF → draft test. `@mockprep/core` shared by api + worker. Worker `ingest`: Gemini
+  (pdf-lib chunks, JSON schema, backoff) or unpdf text parser, key parser, flags, sections.
+  Api: uploads, approve, approve-answered, publish `{force}`. Env GEMINI_API_KEY/GEMINI_MODEL/
+  CHUNK_PAGES (worker + MONGODB_URI, storage). Deps: unpdf, pdf-lib, @google/genai; types 0.5.0.

@@ -7,8 +7,9 @@ competitive exams. The student site and the admin panel are in
 | Package           | What it is                                       | Deployed to                                                                            |
 | ----------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------- |
 | `apps/api`        | Express + Mongoose REST API (`GET /health`)      | Render web service                                                                     |
-| `apps/worker`     | BullMQ workers (currently a `ping` job)          | inside the api on the free plan (`RUN_WORKER_IN_API`); own background worker when paid |
+| `apps/worker`     | BullMQ workers: PDF → test `ingest`, `ping`      | inside the api on the free plan (`RUN_WORKER_IN_API`); own background worker when paid |
 | `packages/types`  | `@mockprep/types`: shared TS types + Zod schemas | GitHub Release tarball                                                                 |
+| `packages/core`   | `@mockprep/core`: models, db, storage, flags     | bundled into api + worker                                                              |
 | `packages/config` | Shared tsconfig / eslint / prettier              | not deployed                                                                           |
 
 ## Local development
@@ -26,7 +27,8 @@ pnpm dev                                   # types (watch) + api on :4000 + work
 curl localhost:4000/health                 # {"status":"ok","db":"up","redis":"up",...}
 ```
 
-The worker logs `pong` on startup. That shows jobs flow through Redis end to end.
+The worker logs `pong` on startup. That shows jobs flow through Redis end to end. With
+`MONGODB_URI` set in `apps/worker/.env` it also runs PDF ingest (see "How uploads work").
 
 | Command          | What it does                                   |
 | ---------------- | ---------------------------------------------- |
@@ -142,6 +144,7 @@ setup. The paid setup for the commercial launch is `render.paid.yaml`, described
 | `STORAGE_DRIVER`                                              | `s3` (R2 speaks the S3 protocol). Never `local` on Render: the disk is wiped on every deploy           |
 | `S3_BUCKET`, `S3_REGION`, `S3_ENDPOINT`, `S3_PUBLIC_BASE_URL` | R2: bucket name, `auto`, `https://<account-id>.r2.cloudflarestorage.com`, the public `r2.dev` URL      |
 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`                  | the R2 API token's keys (the S3 SDK reads these names)                                                 |
+| `GEMINI_API_KEY`                                              | optional: free Google AI Studio key for PDF uploads (see "How uploads work")                           |
 
 `render.yaml` also sets:
 
@@ -222,6 +225,63 @@ Nothing in the code changes. You swap plans and env vars:
   - **Preview.** "Preview as student" is built by the same serializer students will get, so it
     contains no answers or solutions.
   - **Student site.** Published tests appear as cards at `GET /api/exams/:slug/tests`.
+
+## How uploads work
+
+An admin uploads a question paper (PDF), plus an optional answer key and solutions (PDF or
+image), on **Paper uploads** in the admin panel. The worker turns it into a draft test. Only the
+questions it flags need a human.
+
+1. **Upload.** The browser PUTs the files straight to storage (presigned URL:
+   `POST /api/admin/uploads/presign`), then `POST /api/admin/uploads` creates the upload and
+   queues one `ingest` job. The upload document holds the status, progress and log that the
+   progress page polls every 1.5 s.
+2. **Extract** (`apps/worker/src/ingest`).
+   - With `GEMINI_API_KEY`: the paper is split into chunks of `CHUNK_PAGES` pages (default 6), each
+     overlapping the previous by one page. Each chunk goes to Gemini (`GEMINI_MODEL`) with a strict
+     JSON schema and rules: copy text exactly, LaTeX for maths, passages copied into every question,
+     Hindi in the `…Hi` fields, printed answers, figures flagged. Rate limits (429) and 5xx are
+     retried with backoff, honouring the "retry in Ns" hint; the log shows
+     `rate limited, waiting Ns`. Questions repeated across the overlap are merged.
+   - Without a key: a free text parser reads the PDF's text layer (numbering styles, inline
+     options, `Ans:` lines, `Directions (1-5)` passages, section headings, Hindi lines,
+     headers/footers). A scanned PDF fails with "This PDF is a scan — add GEMINI_API_KEY".
+3. **Answer key and solutions.** Text keys (`1. B`, `1-(c)`, `Q1 (B)`, `1 B 2 C`, `12. (3)`,
+   numeric values) are parsed directly. Scans and images are read by Gemini. When numbering
+   restarts per section, answers are matched by paper order.
+4. **Check.** Every question gets flags: `empty_stem`, `option_count`, `no_answer`, `ai_answer`,
+   `needs_figure`, `low_confidence`, `latex`, `duplicate` (already in the bank),
+   `duplicate_in_paper`. The test gets flags for a count that differs from the template and for
+   missing question numbers. Sections come from the paper's headings, matched against the
+   template's section names and aliases. If any question can't be matched, sections are filled
+   in order by the template counts.
+5. **Save.** Questions with no flags are approved, the rest are drafts, and a free draft test is
+   created. **Retry** re-runs the upload and replaces what it made before (refused once its test
+   is published). Uploads left unfinished by a restart are queued again when a worker starts.
+
+The admin reviews on `/tests/:id/review`. Editing a question recomputes its flags; approving
+(`POST /api/admin/questions/:id/approve`) clears them, but is refused without a question text or
+answer. "Approve all answered" (`POST /api/admin/tests/:id/approve-answered`) approves every
+complete draft. `POST /api/admin/tests/:id/publish` returns 409 with the reason while questions
+are unreviewed or counts differ; `{ "force": true }` publishes anyway. Missing answers always
+block.
+
+**Getting a free Gemini key.**
+
+1. Go to [Google AI Studio](https://aistudio.google.com/apikey) and sign in with a Google
+   account.
+2. Click **Create API key**. Pick or create a Google Cloud project. No billing account is needed
+   for the free tier.
+3. Put the key in `GEMINI_API_KEY`: `apps/worker/.env` and `apps/api/.env` locally (the api only
+   uses it to show "AI on"), and in the Render dashboard (`sync: false`). Never commit it.
+4. The default model is `gemini-flash-latest` (a free-tier Flash model). The free tier is rate
+   limited per minute and per day. A 100-question paper is about 5 requests, and the worker waits
+   and retries when it hits a limit. Free-tier prompts may be used by Google to improve its
+   products; use a paid key for papers you can't share.
+
+Local check without a key: upload `apps/worker/test/fixtures/sbi-paper.pdf` with `sbi-key.pdf`
+for SBI PO. You get 12 questions, 11 auto-approved, and Q8 flagged "Needs figure". The fixtures
+are regenerated with `pnpm --filter @mockprep/worker fixtures`.
 
 ## CI
 

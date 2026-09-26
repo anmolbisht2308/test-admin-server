@@ -176,7 +176,13 @@ describe("PDF upload → draft test", () => {
     // 12 of 100 questions: still needs confirmation, then publishes.
     const again = await request(app).post(`/api/admin/tests/${testId}/publish`).set(auth).send({});
     expect(again.status).toBe(409);
+    expect(again.body.error).toBe("The test has 12 of the 100 questions its template expects");
     expect(again.body.details.canForce).toBe(true);
+    const pdf = await request(app)
+      .get(`/api/files/${upload.files.paper.url.replace("/api/files/", "")}`)
+      .expect(200);
+    expect(pdf.headers["content-type"]).toBe("application/pdf");
+    expect(pdf.headers["content-security-policy"]).toBe("frame-ancestors 'self'");
     const published = await request(app)
       .post(`/api/admin/tests/${testId}/publish`)
       .set(auth)

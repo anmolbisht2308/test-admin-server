@@ -245,7 +245,9 @@ export function adminTestsRouter(): Router {
             ? "The test has no questions"
             : checks.drafts.length
               ? `${checks.drafts.length} question(s) are not reviewed yet`
-              : "Fix the checks before publishing";
+              : checks.questionCount.actual !== checks.questionCount.expected
+                ? `The test has ${checks.questionCount.actual} of the ${checks.questionCount.expected} questions its template expects`
+                : "Fix the checks before publishing";
         throw new HttpError(409, message, { ...checks, canForce: !blocking });
       }
       const before = toTestDto(test);
