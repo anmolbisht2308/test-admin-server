@@ -1,5 +1,7 @@
 import {
+  objectIdSchema,
   slugSchema,
+  type PublicTestDetail,
   type ExamDetailResponse,
   type ExamListResponse,
   type PublicTestListResponse,
@@ -81,5 +83,53 @@ export function catalogueRouter(): Router {
     }),
   );
 
+  return router;
+}
+
+/** Public test details (no questions). Mounted at /api/tests. */
+export function publicTestsRouter(): Router {
+  const router = Router();
+  router.get(
+    "/:id",
+    asyncHandler(async (req, res) => {
+      const id = objectIdSchema.safeParse(req.params.id);
+      if (!id.success) throw notFoundError("Test");
+      const t = await TestModel.findOne({
+        _id: id.data,
+        status: "published",
+        $or: [{ publishAt: null }, { publishAt: { $lte: new Date() } }],
+      }).lean();
+      if (!t) throw notFoundError("Test");
+      const s = t.templateSnapshot;
+      const body: PublicTestDetail = {
+        id: t._id.toString(),
+        title: t.title,
+        type: t.type,
+        isFree: t.isFree,
+        examKey: t.examKey,
+        questionCount: t.sections.reduce((acc, x) => acc + x.questionIds.length, 0),
+        totalTimeSec: s.totalTimeSec,
+        sectionCount: t.sections.length,
+        publishedAt: (t.publishedAt ?? t.updatedAt).toISOString(),
+        template: {
+          name: s.name,
+          skin: s.skin,
+          totalTimeSec: s.totalTimeSec,
+          optionCount: s.optionCount,
+          sectionSwitching: s.sectionSwitching,
+          marking: s.marking,
+          ...(s.markingByType ? { markingByType: s.markingByType } : {}),
+          ...(s.multiPartial ? { multiPartial: true } : {}),
+          ...(s.qualifyingPercent === undefined ? {} : { qualifyingPercent: s.qualifyingPercent }),
+        },
+        sections: t.sections.map((x) => ({
+          name: x.name,
+          questionCount: x.questionIds.length,
+          ...(x.timeSec ? { timeSec: x.timeSec } : {}),
+        })),
+      };
+      res.set("Cache-Control", CACHE).json(body);
+    }),
+  );
   return router;
 }

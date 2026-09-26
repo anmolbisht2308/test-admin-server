@@ -175,6 +175,30 @@ export const publicTestCardSchema = z.object({
 });
 export type PublicTestCard = z.infer<typeof publicTestCardSchema>;
 
+/** GET /api/tests/:id — what the instruction screen shows before an attempt starts. */
+export const publicTestDetailSchema = publicTestCardSchema.extend({
+  examKey: z.string(),
+  template: templateSnapshotSchema.pick({
+    name: true,
+    skin: true,
+    totalTimeSec: true,
+    optionCount: true,
+    sectionSwitching: true,
+    marking: true,
+    markingByType: true,
+    multiPartial: true,
+    qualifyingPercent: true,
+  }),
+  sections: z.array(
+    z.object({
+      name: z.string(),
+      questionCount: z.number().int(),
+      timeSec: z.number().int().optional(),
+    }),
+  ),
+});
+export type PublicTestDetail = z.infer<typeof publicTestDetailSchema>;
+
 export const publicTestListResponseSchema = z.object({ tests: z.array(publicTestCardSchema) });
 export type PublicTestListResponse = z.infer<typeof publicTestListResponseSchema>;
 

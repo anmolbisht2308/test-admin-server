@@ -116,6 +116,28 @@ describe("attempts", () => {
     await request(app).post("/api/attempts").set(admin).send({ testId: test.id }).expect(403);
   });
 
+  it("shows public test details (no questions) for the instruction screen", async () => {
+    const app = buildTestApp();
+    const { test } = await publishedTest({ locked: true });
+    const res = await request(app).get(`/api/tests/${test.id}`).expect(200);
+    expect(res.body).toMatchObject({
+      title: "Mini mock",
+      questionCount: 4,
+      template: {
+        skin: "ibps",
+        sectionSwitching: "locked_sequential",
+        marking: { correct: 1, wrong: -0.25 },
+      },
+      sections: [
+        { name: "English Language", questionCount: 2, timeSec: 60 },
+        { name: "Quantitative Aptitude", questionCount: 2, timeSec: 60 },
+      ],
+    });
+    expect(JSON.stringify(res.body)).not.toMatch(/questionIds|"stem"/);
+    await TestModel.updateOne({ _id: test._id }, { status: "draft" });
+    await request(app).get(`/api/tests/${test.id}`).expect(404);
+  });
+
   it("refuses unpublished tests", async () => {
     const app = buildTestApp();
     const { test } = await publishedTest();

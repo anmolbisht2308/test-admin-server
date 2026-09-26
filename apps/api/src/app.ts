@@ -12,7 +12,7 @@ import { createTokenService } from "./lib/tokens.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import { adminRouter } from "./routes/admin/index.js";
 import { studentAuthRouter } from "./routes/auth.js";
-import { catalogueRouter } from "./routes/catalogue.js";
+import { catalogueRouter, publicTestsRouter } from "./routes/catalogue.js";
 import { healthRouter, type HealthChecks } from "./routes/health.js";
 import { meRouter } from "./routes/me.js";
 import { createEmailSender, type EmailSender } from "./services/email.js";
@@ -117,6 +117,7 @@ export function createApp(deps: AppDeps): Express {
   app.use("/api/me", meRouter(ctx));
   app.use("/api/attempts", attemptsRouter(ctx, deps.enqueueScore ?? createScoreEnqueuer(redis)));
   app.use("/api/exams", catalogueRouter());
+  app.use("/api/tests", publicTestsRouter());
   const enqueueIngest = deps.enqueueIngest ?? createIngestEnqueuer(redis);
   app.use("/api/admin", adminRouter(ctx, storage, enqueueIngest));
   for (const router of routers) app.use("/api", router);
